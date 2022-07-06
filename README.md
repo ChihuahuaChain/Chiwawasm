@@ -1,5 +1,9 @@
 # Chiwawasm Repo
 
+[![Rust](https://github.com/ChihuahuaChain/CosmWasm/actions/workflows/rust.yml/badge.svg)](https://github.com/ChihuahuaChain/CosmWasm/actions/workflows/rust.yml)
+
+&nbsp;
+
 This repo is a collection of simple contracts built with the
 [cosmwasm](https://github.com/CosmWasm/cosmwasm) framework.
 
@@ -16,8 +20,6 @@ The following contracts are available for use. For each of the contracts in `con
 You can get more info from `README.md` file in each of the contacts.
 
 &nbsp;
-
-# Development
 
 ## Preparing for merge
 
@@ -60,9 +62,13 @@ Wallet2: chihuahua1me3xey8rvgx3s4u83hctwzfea9wdsx4fxv9xsz
 
 `$ open ~/.chihuahua/config/config.toml`
 
+&nbsp;
+
 ## Block explorer
 
 <https://testnet.explorer.erialos.me/chihuahua>
+
+&nbsp;
 
 ## Source config env for use in the shell (zsh)
 
@@ -137,7 +143,7 @@ Add optimized script to the [package.metadata.scripts] section of the cargo.toml
 
 &nbsp;
 
-## STORE THE SMART CONTRACT TO THE BLOCKCHAIN
+## Store the contract on the blockchain
 
 `$ export RES=$(chihuahuad tx wasm store artifacts/<contract_name.wasm> --from palingram $TXFLAG -y --output json -b block)`
 
@@ -149,13 +155,11 @@ Add optimized script to the [package.metadata.scripts] section of the cargo.toml
 
 &nbsp;
 
-## Get a list of contracts instantiated for $CODE_ID
+### Get a list of contracts instantiated for $CODE_ID
 
 `$ chihuahuad query wasm list-contract-by-code $CODE_ID $NODE --output json`
 
 &nbsp;
-
-## INSTANTATING $CONTRACT for $CODE_ID
 
 ### Prepare the json message payload
 
@@ -201,8 +205,6 @@ Add optimized script to the [package.metadata.scripts] section of the cargo.toml
 
 &nbsp;
 
-## INTERACTING WITH  $CONTRACT
-
 ### Calling execute methods
 
 `$ export E_PAYLOAD='{"burn_contract_balance":{}}'`
@@ -219,12 +221,11 @@ Add optimized script to the [package.metadata.scripts] section of the cargo.toml
 
 &nbsp;
 
-## Run the following command to start the node REPL this is complete with cosmos sdk interactions
+### If you prefer to work in a NodeJs environment, run the following command to start the node REPL this is complete with cosmos sdk interactions
 
-npx @cosmjs/cli@^0.28.1 --init <https://raw.githubusercontent.com/InterWasm/cw-plus-helpers/main/base.ts> --init <https://raw.githubusercontent.com/InterWasm/cw-plus-helpers/main/cw20-base.ts>
-<https://docs.cosmwasm.com/docs/1.0/getting-started/interact-with-contract>
-<https://www.npmjs.com/package/@cosmjs/cli>
+`npx @cosmjs/cli@^0.28.1 --init <https://raw.githubusercontent.com/InterWasm/cw-plus-helpers/main/base.ts> --init <https://raw.githubusercontent.com/InterWasm/cw-plus-helpers/main/cw20-base.ts>
+<https://docs.cosmwasm.com/docs/1.0/getting-started/interact-with-contract>`
 
-## Useful links
+&nbsp;
 
-<https://github.com/cosmos/cosmjs/blob/main/packages/cli/examples/local_faucet.ts>
+### [Check here for more info on @cosmjs/cli](https://www.npmjs.com/package/@cosmjs/cli)
