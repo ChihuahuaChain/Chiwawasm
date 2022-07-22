@@ -2,12 +2,14 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
+    Uint128,
 };
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
+use crate::helpers;
 use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{Config, INIT_CONFIG};
+use crate::state::{Config, BURN_READY_TIMESTAMP, INIT_CONFIG};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:my-first-contract";
@@ -30,6 +32,10 @@ pub fn instantiate(
         .unwrap_or(info.sender);
 
     let config = Config {
+        // number of seconds in 24hours
+        burn_delay_in_seconds: 86400u64,
+        community_pool_address: deps.api.addr_validate(&msg.communityPoolAddress)?,
+        daily_burn_quota: msg.dailyBurnQuota,
         owner: owner.clone(),
     };
 
@@ -51,10 +57,69 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::BurnContractBalance {} => execute_burn_balance(deps, info, env),
+
+        // todo
+        ExecuteMsg::BurnDailyQuota {} => execute_burn_daily_quota(deps, info, env),
+
+        // todo
+        ExecuteMsg::SetMaxDailyBurn { amount } => {
+            execute_set_max_daily_burn(deps, info, env, amount)
+        }
         ExecuteMsg::TransferContractOwnership { new_owner } => {
             execute_transfer_owner(deps, info, new_owner)
         }
+
+        // todo
+        ExecuteMsg::WithdrawFundsToCommunityPool {} => execute_withdraw_funds(deps, info, env),
     }
+}
+
+fn execute_burn_balance(
+    deps: DepsMut,
+    info: MessageInfo,
+    env: Env,
+) -> Result<Response, ContractError> {
+    helpers::verify_caller_is_admin(&info, &deps)?;
+
+    // Get the contract balances
+    let amount = deps.querier.query_all_balances(&env.contract.address)?;
+
+    // create a burn message
+    let burn_msg = BankMsg::Burn { amount };
+
+    // Then we add the message to the response
+    let msgs: Vec<CosmosMsg> = vec![burn_msg.into()];
+
+    // Build response
+    let res = Response::new()
+        .add_attribute("method", "execute_burn_balance")
+        .add_messages(msgs);
+
+    // return response
+    Ok(res)
+}
+
+fn execute_burn_daily_quota(
+    deps: DepsMut,
+    info: MessageInfo,
+    env: Env,
+) -> Result<Response, ContractError> {
+    // Build response
+    let res = Response::new().add_attribute("method", "execute_burn_daily_quota");
+
+    Ok(res)
+}
+
+fn execute_set_max_daily_burn(
+    deps: DepsMut,
+    info: MessageInfo,
+    env: Env,
+    amount: Uint128,
+) -> Result<Response, ContractError> {
+    // Build response
+    let res = Response::new().add_attribute("method", "execute_set_max_daily_burn");
+
+    Ok(res)
 }
 
 fn execute_transfer_owner(
@@ -62,11 +127,7 @@ fn execute_transfer_owner(
     info: MessageInfo,
     new_owner: String,
 ) -> Result<Response, ContractError> {
-    // Before we create a new entry, we check to see if the message sender is the owner of the contract
-    let owner = INIT_CONFIG.load(deps.storage)?.owner;
-    if info.sender != owner {
-        return Err(ContractError::Unauthorized {});
-    }
+    helpers::verify_caller_is_admin(&info, &deps)?;
 
     // validate new owner
     let new_owner = deps.api.addr_validate(&new_owner)?;
@@ -83,32 +144,14 @@ fn execute_transfer_owner(
         .add_attribute("new_owner", updated_config.owner))
 }
 
-fn execute_burn_balance(
+fn execute_withdraw_funds(
     deps: DepsMut,
     info: MessageInfo,
     env: Env,
 ) -> Result<Response, ContractError> {
-    // Before we create a new entry, we check to see if the message sender is the owner of the contract
-    let owner = INIT_CONFIG.load(deps.storage)?.owner;
-    if info.sender != owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // Get the contract balances
-    let amount = deps.querier.query_all_balances(&env.contract.address)?;
-
-    // create a burn message
-    let burn_msg = BankMsg::Burn { amount };
-
-    // Then we add the message to the response
-    let msgs: Vec<CosmosMsg> = vec![burn_msg.into()];
-
     // Build response
-    let res = Response::new()
-        .add_attribute("method", "try_burn_balance")
-        .add_messages(msgs);
+    let res = Response::new().add_attribute("method", "execute_set_max_daily_burn");
 
-    // return response
     Ok(res)
 }
 
@@ -133,6 +176,3 @@ fn query_balance(deps: Deps, env: Env) -> StdResult<BalanceResponse> {
         balance: amount.to_string(),
     })
 }
-
-#[cfg(test)]
-mod tests;

@@ -94,7 +94,7 @@ Wallet2: chihuahua1me3xey8rvgx3s4u83hctwzfea9wdsx4fxv9xsz
 
 ## Send funds to other account
 
-`$ chihuahuad tx bank send [from_key_or_address] [to_address] [amount] [flags]`
+`$ chihuahuad tx bank send cryptoql chihuahua1me3xey8rvgx3s4u83hctwzfea9wdsx4fxv9xsz 1000000stake $TXFLAG`
 
 &nbsp;
 
@@ -201,7 +201,7 @@ Add optimized script to the [package.metadata.scripts] section of the cargo.toml
 
 ### query the data for a storage key in the contract-state directly
 
-`$ chihuahuad query wasm contract-state raw $CONTRACT 636F6E74726163745F696E666F $NODE  --output "json" | jq -r '.data' | base64 -d`
+`$ chihuahuad query wasm contract-state raw $CONTRACT 636F6E666967 $NODE  --output "json" | jq -r '.data' | base64 -d`
 
 &nbsp;
 

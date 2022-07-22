@@ -1,9 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, StdResult, WasmMsg};
+use cosmwasm_std::{to_binary, Addr, CosmosMsg, DepsMut, MessageInfo, StdResult, WasmMsg};
 
-use crate::msg::ExecuteMsg;
+use crate::{msg::ExecuteMsg, state::INIT_CONFIG, ContractError};
 
 /// CwTemplateContract is a wrapper around Addr that provides a lot of helpers
 /// for working with this.
@@ -24,4 +24,13 @@ impl CwTemplateContract {
         }
         .into())
     }
+}
+
+pub fn verify_caller_is_admin(info: &MessageInfo, deps: &DepsMut) -> Result<(), ContractError> {
+    let owner = INIT_CONFIG.load(deps.storage)?.owner;
+    if info.sender != owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    Ok(())
 }
