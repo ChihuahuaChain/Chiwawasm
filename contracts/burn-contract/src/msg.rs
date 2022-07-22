@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     pub owner: Option<String>,
-    pub dailyBurnQuota: Uint128,
-    pub communityPoolAddress: String,
+    pub daily_burn_quota: Uint128,
+    pub community_pool_address: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -22,6 +22,7 @@ pub enum ExecuteMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
+    GetConfig {},
     QueryBalance {},
 }
 

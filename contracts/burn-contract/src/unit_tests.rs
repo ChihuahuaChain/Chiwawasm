@@ -1,49 +1,60 @@
 #[cfg(test)]
 mod tests {
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, Attribute, Uint128, CosmosMsg, BankMsg};
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockQuerier};
+    use cosmwasm_std::{
+        coins, from_binary, Attribute, BankMsg, Coin, CosmosMsg, Empty, MemoryStorage, OwnedDeps,
+        Uint128,
+    };
 
-    use crate::contract::{execute, instantiate};
-    use crate::msg::{ExecuteMsg, InstantiateMsg};
+    use crate::contract::{execute, instantiate, query};
+    use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
     use crate::ContractError;
 
-    #[test]
-    fn proper_initialization() {
+    // Here we create a struct for instatation config
+    struct InstantiationResponse {
+        deps: OwnedDeps<MemoryStorage, MockApi, MockQuerier<Empty>, Empty>,
+        owner: String,
+    }
+
+    // This function instantiate the contract and returns reusable components
+    fn proper_initialization() -> InstantiationResponse {
         let mut deps = mock_dependencies();
+        let owner = String::from("creator");
+        let daily_burn_quota = Uint128::from(1000u128);
+        let community_pool_address = String::from("pool_address");
 
         let msg = InstantiateMsg {
-            owner: Some(String::from("creator")),
-            dailyBurnQuota: Uint128::from(1000u128),
-            communityPoolAddress: String::from("pool_address"),
+            owner: Some(owner.clone()),
+            daily_burn_quota,
+            community_pool_address,
         };
 
-        let info = mock_info("creator", &coins(1000, "stake"));
-
         // we can just call .unwrap() to assert this was a success
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+        let funds = coins(1000, "stake");
+        let info = mock_info(&owner, &funds);
+        let _res = instantiate(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
         assert_eq!(0, _res.messages.len());
+
+        // query and verify state
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetConfig {}).unwrap();
+        let contract_config = from_binary(&res).unwrap();
+        assert_eq!(msg, contract_config);
+
+        // return reusable data
+        InstantiationResponse { deps, owner }
     }
 
     #[test]
     fn execute_transfer_owner() {
-        // setup an instance of the contract
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg {
-            owner: Some(String::from("creator")),
-            dailyBurnQuota: Uint128::from(1000u128),
-            communityPoolAddress: String::from("pool_address"),
-        };
-
-        let info = mock_info("creator", &coins(2, "stake"));
-        instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        let mut instance = proper_initialization();
 
         // create a transfer owner message
+        let info = mock_info(&instance.owner, &[]);
         let msg = ExecuteMsg::TransferContractOwnership {
             new_owner: String::from("new_contract_owner"),
         };
 
-        let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        let _res = execute(instance.deps.as_mut(), mock_env(), info, msg).unwrap();
         assert_eq!(_res.attributes.len(), 2);
         assert_eq!(
             _res.attributes[0],
@@ -61,10 +72,11 @@ mod tests {
         );
 
         // Here we try to call transfer owner with the old owner which should fail
+        let info = mock_info(&instance.owner, &[]);
         let msg = ExecuteMsg::TransferContractOwnership {
             new_owner: String::from("another_owner"),
         };
-        let _err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
+        let _err = execute(instance.deps.as_mut(), mock_env(), info, msg).unwrap_err();
         match _err {
             ContractError::Unauthorized {} => {}
             e => panic!("unexpected error: {}", e),
@@ -73,21 +85,12 @@ mod tests {
 
     #[test]
     fn execute_burn_balance() {
-        // setup an instance of the contract
-        let mut deps = mock_dependencies();
+        let mut instance = proper_initialization();
 
-        let msg = InstantiateMsg {
-            owner: Some(String::from("creator")),
-            dailyBurnQuota: Uint128::from(1000u128),
-            communityPoolAddress: String::from("pool_address"),
-        };
-
-        let info = mock_info("creator", &[]);
-        instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
-
-        // create a burn balnce  message
+        // create a burn balance  message
         let msg = ExecuteMsg::BurnContractBalance {};
-        let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        let info = mock_info(&instance.owner, &[]);
+        let _res = execute(instance.deps.as_mut(), mock_env(), info, msg).unwrap();
         assert_eq!(_res.attributes.len(), 1);
         assert_eq!(
             _res.attributes[0],
@@ -104,4 +107,8 @@ mod tests {
             CosmosMsg::Bank(BankMsg::Burn { amount: vec![] })
         );
     }
+
+    // todo ExecuteMsg::BurnDailyQuota
+    // todo ExecuteMsg::SetMaxDailyBurn
+    // todo ExecuteMsg::WithdrawFundsToCommunityPool
 }

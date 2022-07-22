@@ -9,7 +9,7 @@ use cw2::set_contract_version;
 use crate::error::ContractError;
 use crate::helpers;
 use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{Config, BURN_READY_TIMESTAMP, INIT_CONFIG};
+use crate::state::{Config, INIT_CONFIG};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:my-first-contract";
@@ -34,8 +34,8 @@ pub fn instantiate(
     let config = Config {
         // number of seconds in 24hours
         burn_delay_in_seconds: 86400u64,
-        community_pool_address: deps.api.addr_validate(&msg.communityPoolAddress)?,
-        daily_burn_quota: msg.dailyBurnQuota,
+        community_pool_address: deps.api.addr_validate(&msg.community_pool_address)?,
+        daily_burn_quota: msg.daily_burn_quota,
         owner: owner.clone(),
     };
 
@@ -160,6 +160,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     // Match and route the query message to the appropriate handler
     match msg {
         QueryMsg::QueryBalance {} => to_binary(&query_balance(deps, env)?),
+        QueryMsg::GetConfig {} => to_binary(&query_config(deps)?),
     }
 }
 
@@ -175,4 +176,9 @@ fn query_balance(deps: Deps, env: Env) -> StdResult<BalanceResponse> {
     Ok(BalanceResponse {
         balance: amount.to_string(),
     })
+}
+
+fn query_config(deps: Deps) -> StdResult<Config> {
+    let config = INIT_CONFIG.load(deps.storage)?;
+    Ok(config)
 }
