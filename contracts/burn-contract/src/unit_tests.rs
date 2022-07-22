@@ -20,12 +20,10 @@ mod tests {
     fn proper_initialization() -> InstantiationResponse {
         let mut deps = mock_dependencies();
         let owner = String::from("creator");
-        let daily_burn_quota = Uint128::from(1000u128);
         let community_pool_address = String::from("pool_address");
 
         let msg = InstantiateMsg {
             owner: Some(owner.clone()),
-            daily_burn_quota,
             community_pool_address,
         };
 

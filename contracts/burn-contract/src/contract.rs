@@ -32,11 +32,10 @@ pub fn instantiate(
         .unwrap_or(info.sender);
 
     let config = Config {
-        // number of seconds in 24hours
-        burn_delay_in_seconds: 86400u64,
         community_pool_address: deps.api.addr_validate(&msg.community_pool_address)?,
-        daily_burn_quota: msg.daily_burn_quota,
         owner: owner.clone(),
+        // here we initialize the default daily burn amount
+        daily_burn_amount: 500_000_000_000_000u128,
     };
 
     // save the owner to the INIT_CONFIG state
@@ -61,14 +60,14 @@ pub fn execute(
         // todo
         ExecuteMsg::BurnDailyQuota {} => execute_burn_daily_quota(deps, info, env),
 
-        // todo
-        ExecuteMsg::SetMaxDailyBurn { amount } => {
-            execute_set_max_daily_burn(deps, info, env, amount)
-        }
         ExecuteMsg::TransferContractOwnership { new_owner } => {
             execute_transfer_owner(deps, info, new_owner)
         }
 
+        // todo
+        ExecuteMsg::SetMaxDailyBurn { amount } => {
+            execute_set_max_daily_burn(deps, info, env, amount)
+        }
         // todo
         ExecuteMsg::WithdrawFundsToCommunityPool {} => execute_withdraw_funds(deps, info, env),
     }
