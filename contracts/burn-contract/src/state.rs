@@ -18,6 +18,3 @@ pub const INIT_CONFIG: Item<Config> = Item::new("INIT_CONFIG");
 
 // This stores the time when the BurnDailyQuota method is ready to be called
 pub const BURN_READY_TIMESTAMP: Item<Timestamp> = Item::new("burn_ready_timestamp");
-
-
-

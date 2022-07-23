@@ -25,7 +25,7 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetConfig {},
-    QueryBalance { },
+    QueryBalance {},
 }
 
 // A custom struct is defined for each query response
