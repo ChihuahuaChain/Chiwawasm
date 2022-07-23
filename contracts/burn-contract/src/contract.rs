@@ -60,7 +60,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::BurnContractBalance {} => execute_burn_balance(deps, info, env),
-        ExecuteMsg::BurnDailyQuota {} => execute_burn_daily_quota(deps, info, env),
+        ExecuteMsg::BurnDailyQuota {} => execute_burn_daily_quota(deps, env),
         ExecuteMsg::TransferContractOwnership { new_owner } => {
             execute_transfer_owner(deps, info, new_owner)
         }
@@ -101,15 +101,53 @@ fn execute_burn_balance(
     Ok(res)
 }
 
-// todo
-fn execute_burn_daily_quota(
-    deps: DepsMut,
-    info: MessageInfo,
-    env: Env,
-) -> Result<Response, ContractError> {
-    // Build response
-    let res = Response::new().add_attribute("method", "execute_burn_daily_quota");
+fn execute_burn_daily_quota(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
+    let burn_ready_time = BURN_READY_TIMESTAMP.load(deps.storage)?;
+    let config = INIT_CONFIG.load(deps.storage)?;
+    let now = env.block.time;
 
+    if now < burn_ready_time {
+        return Err(ContractError::DailyBurnNotReady {});
+    }
+
+    // update the next burn time
+    let next_burn_time = now.plus_seconds(config.burn_delay_seconds);
+    BURN_READY_TIMESTAMP.save(deps.storage, &next_burn_time)?;
+
+    // To get the amount of coins to be burned
+    // find the coin with non-zero balance that matches the denom
+    let contract_balances = deps.querier.query_all_balances(&env.contract.address)?;
+    let coin = contract_balances
+        .iter()
+        .find(|coin| coin.denom == config.native_denom && !coin.amount.is_zero());
+
+    let coin = match coin {
+        Some(coin) => match coin.amount > config.daily_burn_amount {
+            true => Coin {
+                amount: config.daily_burn_amount,
+                denom: config.native_denom,
+            },
+            false => coin.clone(),
+        },
+        None => {
+            return Err(ContractError::InsufficientContractBalance {});
+        }
+    };
+
+    // we can now proceed to burning the coins
+    // create a burn message
+    let amount = [coin.clone()].to_vec();
+    let burn_msg = BankMsg::Burn { amount };
+
+    // Then we add the message to the response
+    let msgs: Vec<CosmosMsg> = vec![burn_msg.into()];
+
+    // Build response
+    let res = Response::new()
+        .add_attribute("method", "execute_burn_daily_quota")
+        .add_messages(msgs);
+
+    // return response
     Ok(res)
 }
 

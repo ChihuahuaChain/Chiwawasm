@@ -48,22 +48,6 @@ mod tests {
         let contract_config = from_binary(&res).unwrap();
         assert_eq!(msg, contract_config);
 
-        // query and verify balance
-        let res = query(deps.as_ref(), env.clone(), QueryMsg::QueryBalance {}).unwrap();
-        let balance: BalanceResponse = from_binary(&res).unwrap();
-        assert_eq!(
-            balance,
-            BalanceResponse {
-                amount: match contract_balances.len() > 0 {
-                    true => contract_balances[0].clone(),
-                    false => Coin {
-                        amount: Uint128::from(0u128),
-                        denom: String::from(NATIVE_DENOM)
-                    },
-                }
-            },
-        );
-
         // return reusable data
         InstantiationResponse { deps, owner, env }
     }
@@ -110,7 +94,7 @@ mod tests {
 
     #[test]
     fn execute_burn_balance() {
-        let funds: [Coin; 0] = [];
+        let funds = coins(DEFAULT_DAILY_QUOTA, NATIVE_DENOM);
         let mut instance = proper_initialization(&funds);
 
         // create a burn balance  message
@@ -130,21 +114,21 @@ mod tests {
         assert_eq!(_res.messages.len(), 1);
         assert_eq!(
             _res.messages[0].msg,
-            CosmosMsg::Bank(BankMsg::Burn { amount: vec![] })
+            CosmosMsg::Bank(BankMsg::Burn {
+                amount: vec![Coin {
+                    denom: String::from(NATIVE_DENOM),
+                    amount: Uint128::from(DEFAULT_DAILY_QUOTA),
+                }]
+            })
         );
     }
 
     #[test]
-    fn execute_burn_daily_quota() {
-        // we instantiate the contract with a balance > than the daily quota
+    fn burn_daily_quota_succeed_with_balance_bigger_than_daily_limit() {
         const EXTRA_FUNDS: u128 = 123456u128;
         let funds = coins(DEFAULT_DAILY_QUOTA + EXTRA_FUNDS, NATIVE_DENOM);
         let mut instance = proper_initialization(&funds);
 
-        // Here we set the block time
-        instance.env.block.time = Timestamp::from_seconds(0);
-
-        // TEST CASE 1;
         let info = mock_info(&instance.owner, &[]);
         let msg = ExecuteMsg::BurnDailyQuota {};
 
@@ -170,43 +154,53 @@ mod tests {
                 }]
             })
         );
+    }
 
-        // we then query the contract balance to see if it tallies with expectation
-        let msg = QueryMsg::QueryBalance {};
-        let res = query(instance.deps.as_ref(), instance.env.clone(), msg).unwrap();
-        let balance: BalanceResponse = from_binary(&res).unwrap();
-        assert_eq!(
-            balance,
-            BalanceResponse {
-                amount: Coin {
-                    amount: Uint128::from(EXTRA_FUNDS),
-                    denom: String::from(NATIVE_DENOM),
-                },
-            },
-        );
+    #[test]
+    fn burn_daily_quota_failed_when_called_before_burn_time() {
+        const EXTRA_FUNDS: u128 = 123456u128;
+        let funds = coins(EXTRA_FUNDS, NATIVE_DENOM);
+        let mut instance = proper_initialization(&funds);
 
-        // TEST CASE 2;
-        let msg = ExecuteMsg::BurnDailyQuota {};
+        // when called the first time, it should burn the daily quota
         let info = mock_info(&instance.owner, &[]);
+        let msg = ExecuteMsg::BurnDailyQuota {};
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
+        assert_eq!(_res.messages.len(), 1);
 
         // when called again it should not allow us to burn
         // this is because the next burn duration has not been reached
-        let _err = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap_err();
+        let info = mock_info(&instance.owner, &[]);
+        let msg = ExecuteMsg::BurnDailyQuota {};
+        let _err = execute(instance.deps.as_mut(), instance.env, info, msg).unwrap_err();
         match _err {
             ContractError::DailyBurnNotReady {} => {}
             e => panic!("unexpected error: {}", e),
         }
+    }
 
-        // TEST CASE 3;
-        let msg = ExecuteMsg::BurnDailyQuota {};
+    #[test]
+    fn burn_daily_quota_succeed_when_called_after_burn_time() {
+        let funds = coins(DEFAULT_DAILY_QUOTA, NATIVE_DENOM);
+        let mut instance = proper_initialization(&funds);
+
+        // when called the first time, it should burn the daily quota
         let info = mock_info(&instance.owner, &[]);
+        let msg = ExecuteMsg::BurnDailyQuota {};
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
+        assert_eq!(_res.messages.len(), 1);
 
         // we can fast foward the time by BURN_DELAY_SECONDS + 3600seconds
-        instance.env.block.time =
-            Timestamp::from_seconds(0).plus_seconds(BURN_DELAY_SECONDS + 3600);
+        instance.env.block.time = instance
+            .env
+            .block
+            .time
+            .plus_seconds(BURN_DELAY_SECONDS + 3600);
 
         // it should allow us to call the burn function again and beacuse contract balance
         // is now less than dailyQuota, it should burn all balance
+        let info = mock_info(&instance.owner, &[]);
+        let msg = ExecuteMsg::BurnDailyQuota {};
         let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
         // we can inspect the returned params
         assert_eq!(_res.attributes.len(), 1);
@@ -223,26 +217,35 @@ mod tests {
             CosmosMsg::Bank(BankMsg::Burn {
                 amount: vec![Coin {
                     denom: String::from(NATIVE_DENOM),
-                    amount: Uint128::from(EXTRA_FUNDS),
+                    amount: Uint128::from(DEFAULT_DAILY_QUOTA),
                 }]
             })
         );
+    }
 
-        // query the balance again to ensure its zero
-        let msg = QueryMsg::QueryBalance {};
-        let res = query(instance.deps.as_ref(), instance.env.clone(), msg).unwrap();
-        let balance: BalanceResponse = from_binary(&res).unwrap();
-        assert_eq!(
-            balance,
-            BalanceResponse {
-                amount: Coin {
-                    amount: Uint128::from(0u128),
-                    denom: String::from(NATIVE_DENOM),
-                },
-            },
-        );
+    #[test]
+    fn execute_burn_daily_quota_fail_with_zero_balance() {
+        let funds = coins(0u128, NATIVE_DENOM);
+        let mut instance = proper_initialization(&funds);
 
-        // TEST CASE 4;
+        // we can verify this by calling the burn method again which should return a contract
+        // error stating there is no tokens to burn
+        let msg = ExecuteMsg::BurnDailyQuota {};
+        let info = mock_info(&instance.owner, &[]);
+
+        // when called again it should not allow us to burn
+        // this is because the next burn duration has not been reached
+        let _err = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap_err();
+        match _err {
+            ContractError::InsufficientContractBalance {} => {}
+            e => panic!("unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn execute_burn_daily_quota_fail_with_no_balance() {
+        let mut instance = proper_initialization(&[]);
+
         // we can verify this by calling the burn method again which should return a contract
         // error stating there is no tokens to burn
         let msg = ExecuteMsg::BurnDailyQuota {};
