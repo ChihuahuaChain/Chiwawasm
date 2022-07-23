@@ -134,6 +134,7 @@ mod tests {
 
     #[test]
     fn execute_burn_daily_quota() {
+        // we instantiate the contract with a balance > than the daily quota
         const EXTRA_FUNDS: u128 = 123456u128;
         let funds = coins(DEFAULT_DAILY_QUOTA + EXTRA_FUNDS, NATIVE_DENOM);
         let mut instance = proper_initialization(&funds);
@@ -142,13 +143,13 @@ mod tests {
         instance.env.block.time = Timestamp::from_seconds(0);
 
         // TEST CASE 1;
-        // we instantiate the contract with a balance > than the daily quota
         let info = mock_info(&instance.owner, &[]);
         let msg = ExecuteMsg::BurnDailyQuota {};
 
         // when called the first time, it should burn the daily quota
-        // we can inspect the returned params
         let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
+
+        // we can inspect the returned params
         assert_eq!(_res.attributes.len(), 1);
         assert_eq!(
             _res.attributes[0],
@@ -198,12 +199,11 @@ mod tests {
         let msg = ExecuteMsg::BurnDailyQuota {};
         let info = mock_info(&instance.owner, &[]);
 
-        // we can fast foward the time and call the method again this time,
-        let twenty_four_hours_from_now =
-            Timestamp::from_seconds(0).plus_seconds(BURN_DELAY_SECONDS);
-        instance.env.block.time = twenty_four_hours_from_now.plus_seconds(3600);
+        // we can fast foward the time by BURN_DELAY_SECONDS + 3600seconds
+        instance.env.block.time =
+            Timestamp::from_seconds(0).plus_seconds(BURN_DELAY_SECONDS + 3600);
 
-        // it should allow us to call the function beacuse contract balance
+        // it should allow us to call the burn function again and beacuse contract balance
         // is now less than dailyQuota, it should burn all balance
         let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
         // we can inspect the returned params
@@ -226,8 +226,22 @@ mod tests {
             })
         );
 
+        // query the balance again to ensure its zero
+        let msg = QueryMsg::QueryBalance {};
+        let res = query(instance.deps.as_ref(), instance.env.clone(), msg).unwrap();
+        let balance: BalanceResponse = from_binary(&res).unwrap();
+        assert_eq!(
+            balance,
+            BalanceResponse {
+                amount: Coin {
+                    amount: Uint128::from(0u128),
+                    denom: String::from(NATIVE_DENOM),
+                },
+            },
+        );
+
         // TEST CASE 4;
-        // we can verify this by calling the method again which should return a contract
+        // we can verify this by calling the burn method again which should return a contract
         // error stating there is no tokens to burn
         let msg = ExecuteMsg::BurnDailyQuota {};
         let info = mock_info(&instance.owner, &[]);

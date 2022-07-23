@@ -2,13 +2,13 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     to_binary, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, Uint128,
+    StdResult, Timestamp, Uint128,
 };
 
 use crate::error::ContractError;
 use crate::helpers;
 use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{Config, DEFAULT_DAILY_QUOTA, INIT_CONFIG};
+use crate::state::{Config, BURN_READY_TIMESTAMP, DEFAULT_DAILY_QUOTA, INIT_CONFIG};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:my-first-contract";
@@ -40,6 +40,10 @@ pub fn instantiate(
 
     // save the owner to the INIT_CONFIG state
     INIT_CONFIG.save(deps.storage, &config)?;
+
+    // Set the BURN_READY_TIMESTAMP to now
+    let now = _env.block.time;
+    BURN_READY_TIMESTAMP.save(deps.storage, &now)?;
 
     // return response
     Ok(Response::new()
@@ -158,7 +162,7 @@ fn execute_withdraw_funds_to_community_pool(
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     // Match and route the query message to the appropriate handler
     match msg {
-        QueryMsg::QueryBalance {  } => to_binary(&query_balance(deps, env)?),
+        QueryMsg::QueryBalance {} => to_binary(&query_balance(deps, env)?),
         QueryMsg::GetConfig {} => to_binary(&query_config(deps)?),
     }
 }
