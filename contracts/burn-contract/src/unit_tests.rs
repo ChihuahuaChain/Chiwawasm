@@ -157,6 +157,39 @@ mod tests {
     }
 
     #[test]
+    fn burn_daily_quota_succeed_with_balance_smaller_than_daily_limit() {
+        const EXTRA_FUNDS: u128 = 123456u128;
+        let funds = coins(EXTRA_FUNDS, NATIVE_DENOM);
+        let mut instance = proper_initialization(&funds);
+
+        let info = mock_info(&instance.owner, &[]);
+        let msg = ExecuteMsg::BurnDailyQuota {};
+
+        // when called the first time, it should burn the daily quota
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
+
+        // we can inspect the returned params
+        assert_eq!(_res.attributes.len(), 1);
+        assert_eq!(
+            _res.attributes[0],
+            Attribute {
+                key: String::from("method"),
+                value: String::from("execute_burn_daily_quota")
+            }
+        );
+        assert_eq!(_res.messages.len(), 1);
+        assert_eq!(
+            _res.messages[0].msg,
+            CosmosMsg::Bank(BankMsg::Burn {
+                amount: vec![Coin {
+                    denom: String::from(NATIVE_DENOM),
+                    amount: Uint128::from(EXTRA_FUNDS),
+                }]
+            })
+        );
+    }
+
+    #[test]
     fn burn_daily_quota_failed_when_called_before_burn_time() {
         const EXTRA_FUNDS: u128 = 123456u128;
         let funds = coins(EXTRA_FUNDS, NATIVE_DENOM);

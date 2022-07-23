@@ -136,7 +136,7 @@ fn execute_burn_daily_quota(deps: DepsMut, env: Env) -> Result<Response, Contrac
 
     // we can now proceed to burning the coins
     // create a burn message
-    let amount = [coin.clone()].to_vec();
+    let amount = [coin].to_vec();
     let burn_msg = BankMsg::Burn { amount };
 
     // Then we add the message to the response
