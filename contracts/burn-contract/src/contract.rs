@@ -35,6 +35,7 @@ pub fn instantiate(
         owner: owner.clone(),
         // here we initialize the default daily burn amount
         daily_burn_amount: DEFAULT_DAILY_QUOTA,
+        native_denom: msg.native_denom,
     };
 
     // save the owner to the INIT_CONFIG state
@@ -157,14 +158,15 @@ fn execute_withdraw_funds_to_community_pool(
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     // Match and route the query message to the appropriate handler
     match msg {
-        QueryMsg::QueryBalance { denom } => to_binary(&query_balance(deps, env, denom)?),
+        QueryMsg::QueryBalance {  } => to_binary(&query_balance(deps, env)?),
         QueryMsg::GetConfig {} => to_binary(&query_config(deps)?),
     }
 }
 
-fn query_balance(deps: Deps, env: Env, denom: String) -> StdResult<BalanceResponse> {
+fn query_balance(deps: Deps, env: Env) -> StdResult<BalanceResponse> {
     // get contract balances
     let contract_balances = deps.querier.query_all_balances(&env.contract.address)?;
+    let denom = INIT_CONFIG.load(deps.storage)?.native_denom;
 
     let default = Coin {
         amount: Uint128::from(0u128),

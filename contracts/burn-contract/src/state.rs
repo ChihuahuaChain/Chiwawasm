@@ -9,6 +9,7 @@ pub struct Config {
     pub community_pool_address: Addr,
     pub daily_burn_amount: u128,
     pub owner: Addr,
+    pub native_denom: String,
 }
 
 // This stores the config variables during initialization of the contract

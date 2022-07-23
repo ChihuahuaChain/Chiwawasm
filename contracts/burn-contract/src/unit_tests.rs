@@ -14,6 +14,8 @@ mod tests {
     use crate::state::{BURN_DELAY_SECONDS, DEFAULT_DAILY_QUOTA};
     use crate::ContractError;
 
+    const NATIVE_DENOM: &str = "udenom";
+
     // Here we create a struct for instatation config
     struct InstantiationResponse {
         deps: OwnedDeps<MemoryStorage, MockApi, MockQuerier<Empty>, Empty>,
@@ -31,6 +33,7 @@ mod tests {
         let msg = InstantiateMsg {
             owner: Some(owner.clone()),
             community_pool_address,
+            native_denom: String::from(NATIVE_DENOM),
         };
 
         // we can just call .unwrap() to assert this was a success
@@ -44,14 +47,7 @@ mod tests {
         assert_eq!(msg, contract_config);
 
         // query and verify balance
-        let res = query(
-            deps.as_ref(),
-            env.clone(),
-            QueryMsg::QueryBalance {
-                denom: String::from("stake"),
-            },
-        )
-        .unwrap();
+        let res = query(deps.as_ref(), env.clone(), QueryMsg::QueryBalance {}).unwrap();
         let balance: BalanceResponse = from_binary(&res).unwrap();
         assert_eq!(
             balance,
@@ -60,7 +56,7 @@ mod tests {
                     true => contract_balances[0].clone(),
                     false => Coin {
                         amount: Uint128::from(0u128),
-                        denom: String::from("stake")
+                        denom: String::from(NATIVE_DENOM)
                     },
                 }
             },
@@ -139,7 +135,7 @@ mod tests {
     #[test]
     fn execute_burn_daily_quota() {
         const EXTRA_FUNDS: u128 = 123456u128;
-        let funds = coins(DEFAULT_DAILY_QUOTA + EXTRA_FUNDS, "stake");
+        let funds = coins(DEFAULT_DAILY_QUOTA + EXTRA_FUNDS, NATIVE_DENOM);
         let mut instance = proper_initialization(&funds);
 
         // Here we set the block time
@@ -166,16 +162,14 @@ mod tests {
             _res.messages[0].msg,
             CosmosMsg::Bank(BankMsg::Burn {
                 amount: vec![Coin {
-                    denom: String::from("stake"),
+                    denom: String::from(NATIVE_DENOM),
                     amount: Uint128::from(DEFAULT_DAILY_QUOTA),
                 }]
             })
         );
 
         // we then query the contract balance to see if it tallies with expectation
-        let msg = QueryMsg::QueryBalance {
-            denom: String::from("stake"),
-        };
+        let msg = QueryMsg::QueryBalance {};
         let res = query(instance.deps.as_ref(), instance.env.clone(), msg).unwrap();
         let balance: BalanceResponse = from_binary(&res).unwrap();
         assert_eq!(
@@ -183,7 +177,7 @@ mod tests {
             BalanceResponse {
                 amount: Coin {
                     amount: Uint128::from(EXTRA_FUNDS),
-                    denom: String::from("stake"),
+                    denom: String::from(NATIVE_DENOM),
                 },
             },
         );
@@ -226,7 +220,7 @@ mod tests {
             _res.messages[0].msg,
             CosmosMsg::Bank(BankMsg::Burn {
                 amount: vec![Coin {
-                    denom: String::from("stake"),
+                    denom: String::from(NATIVE_DENOM),
                     amount: Uint128::from(EXTRA_FUNDS),
                 }]
             })
