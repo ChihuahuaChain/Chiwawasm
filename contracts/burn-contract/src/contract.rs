@@ -1,15 +1,14 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
-    Uint128,
+    to_binary, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
+    StdResult, Uint128,
 };
-use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::helpers;
 use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{Config, INIT_CONFIG};
+use crate::state::{Config, DEFAULT_DAILY_QUOTA, INIT_CONFIG};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:my-first-contract";
@@ -23,7 +22,7 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     //Store the contract name and version
-    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     // Get the owner of the contract
     let owner = msg
@@ -35,7 +34,7 @@ pub fn instantiate(
         community_pool_address: deps.api.addr_validate(&msg.community_pool_address)?,
         owner: owner.clone(),
         // here we initialize the default daily burn amount
-        daily_burn_amount: 500_000_000_000_000u128,
+        daily_burn_amount: DEFAULT_DAILY_QUOTA,
     };
 
     // save the owner to the INIT_CONFIG state
@@ -56,10 +55,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::BurnContractBalance {} => execute_burn_balance(deps, info, env),
-
-        // todo
         ExecuteMsg::BurnDailyQuota {} => execute_burn_daily_quota(deps, info, env),
-
         ExecuteMsg::TransferContractOwnership { new_owner } => {
             execute_transfer_owner(deps, info, new_owner)
         }
@@ -69,7 +65,9 @@ pub fn execute(
             execute_set_max_daily_burn(deps, info, env, amount)
         }
         // todo
-        ExecuteMsg::WithdrawFundsToCommunityPool {} => execute_withdraw_funds(deps, info, env),
+        ExecuteMsg::WithdrawFundsToCommunityPool {} => {
+            execute_withdraw_funds_to_community_pool(deps, info, env)
+        }
     }
 }
 
@@ -98,6 +96,7 @@ fn execute_burn_balance(
     Ok(res)
 }
 
+// todo
 fn execute_burn_daily_quota(
     deps: DepsMut,
     info: MessageInfo,
@@ -105,18 +104,6 @@ fn execute_burn_daily_quota(
 ) -> Result<Response, ContractError> {
     // Build response
     let res = Response::new().add_attribute("method", "execute_burn_daily_quota");
-
-    Ok(res)
-}
-
-fn execute_set_max_daily_burn(
-    deps: DepsMut,
-    info: MessageInfo,
-    env: Env,
-    amount: Uint128,
-) -> Result<Response, ContractError> {
-    // Build response
-    let res = Response::new().add_attribute("method", "execute_set_max_daily_burn");
 
     Ok(res)
 }
@@ -143,7 +130,19 @@ fn execute_transfer_owner(
         .add_attribute("new_owner", updated_config.owner))
 }
 
-fn execute_withdraw_funds(
+fn execute_set_max_daily_burn(
+    deps: DepsMut,
+    info: MessageInfo,
+    env: Env,
+    amount: Uint128,
+) -> Result<Response, ContractError> {
+    // Build response
+    let res = Response::new().add_attribute("method", "execute_set_max_daily_burn");
+
+    Ok(res)
+}
+
+fn execute_withdraw_funds_to_community_pool(
     deps: DepsMut,
     info: MessageInfo,
     env: Env,
@@ -158,22 +157,30 @@ fn execute_withdraw_funds(
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     // Match and route the query message to the appropriate handler
     match msg {
-        QueryMsg::QueryBalance {} => to_binary(&query_balance(deps, env)?),
+        QueryMsg::QueryBalance { denom } => to_binary(&query_balance(deps, env, denom)?),
         QueryMsg::GetConfig {} => to_binary(&query_config(deps)?),
     }
 }
 
-fn query_balance(deps: Deps, env: Env) -> StdResult<BalanceResponse> {
-    // Get the contract balances
-    let amount = deps
-        .querier
-        .query_all_balances(&env.contract.address)?
-        .first()
-        .unwrap()
-        .clone();
+fn query_balance(deps: Deps, env: Env, denom: String) -> StdResult<BalanceResponse> {
+    // get contract balances
+    let contract_balances = deps.querier.query_all_balances(&env.contract.address)?;
+
+    let default = Coin {
+        amount: Uint128::from(0u128),
+        denom: denom.clone(),
+    };
+
+    let coin = contract_balances
+        .iter()
+        .find(|coin| coin.denom == denom)
+        .unwrap_or(&default);
 
     Ok(BalanceResponse {
-        balance: amount.to_string(),
+        amount: Coin {
+            amount: coin.amount,
+            denom: coin.denom.clone(),
+        },
     })
 }
 

@@ -1,24 +1,30 @@
 #[cfg(test)]
 mod tests {
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockQuerier};
+    use cosmwasm_std::testing::{
+        mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info, MockApi,
+        MockQuerier,
+    };
     use cosmwasm_std::{
-        coins, from_binary, Attribute, BankMsg, Coin, CosmosMsg, Empty, MemoryStorage, OwnedDeps,
-        Uint128,
+        coins, from_binary, Attribute, BalanceResponse, BankMsg, Coin, CosmosMsg, Empty, Env,
+        MemoryStorage, OwnedDeps, Timestamp, Uint128,
     };
 
     use crate::contract::{execute, instantiate, query};
     use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+    use crate::state::{BURN_DELAY_SECONDS, DEFAULT_DAILY_QUOTA};
     use crate::ContractError;
 
     // Here we create a struct for instatation config
     struct InstantiationResponse {
         deps: OwnedDeps<MemoryStorage, MockApi, MockQuerier<Empty>, Empty>,
         owner: String,
+        env: Env,
     }
 
     // This function instantiate the contract and returns reusable components
-    fn proper_initialization() -> InstantiationResponse {
-        let mut deps = mock_dependencies();
+    fn proper_initialization(contract_balances: &[Coin]) -> InstantiationResponse {
+        let mut deps = mock_dependencies_with_balance(contract_balances);
+        let env = mock_env();
         let owner = String::from("creator");
         let community_pool_address = String::from("pool_address");
 
@@ -28,23 +34,46 @@ mod tests {
         };
 
         // we can just call .unwrap() to assert this was a success
-        let funds = coins(1000, "stake");
-        let info = mock_info(&owner, &funds);
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
+        let info = mock_info(&owner, &[]);
+        let _res = instantiate(deps.as_mut(), env.clone(), info, msg.clone()).unwrap();
         assert_eq!(0, _res.messages.len());
 
         // query and verify state
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetConfig {}).unwrap();
+        let res = query(deps.as_ref(), env.clone(), QueryMsg::GetConfig {}).unwrap();
         let contract_config = from_binary(&res).unwrap();
         assert_eq!(msg, contract_config);
 
+        // query and verify balance
+        let res = query(
+            deps.as_ref(),
+            env.clone(),
+            QueryMsg::QueryBalance {
+                denom: String::from("stake"),
+            },
+        )
+        .unwrap();
+        let balance: BalanceResponse = from_binary(&res).unwrap();
+        assert_eq!(
+            balance,
+            BalanceResponse {
+                amount: match contract_balances.len() > 0 {
+                    true => contract_balances[0].clone(),
+                    false => Coin {
+                        amount: Uint128::from(0u128),
+                        denom: String::from("stake")
+                    },
+                }
+            },
+        );
+
         // return reusable data
-        InstantiationResponse { deps, owner }
+        InstantiationResponse { deps, owner, env }
     }
 
     #[test]
     fn execute_transfer_owner() {
-        let mut instance = proper_initialization();
+        let funds: [Coin; 0] = [];
+        let mut instance = proper_initialization(&funds);
 
         // create a transfer owner message
         let info = mock_info(&instance.owner, &[]);
@@ -52,7 +81,7 @@ mod tests {
             new_owner: String::from("new_contract_owner"),
         };
 
-        let _res = execute(instance.deps.as_mut(), mock_env(), info, msg).unwrap();
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
         assert_eq!(_res.attributes.len(), 2);
         assert_eq!(
             _res.attributes[0],
@@ -74,7 +103,7 @@ mod tests {
         let msg = ExecuteMsg::TransferContractOwnership {
             new_owner: String::from("another_owner"),
         };
-        let _err = execute(instance.deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        let _err = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap_err();
         match _err {
             ContractError::Unauthorized {} => {}
             e => panic!("unexpected error: {}", e),
@@ -83,12 +112,13 @@ mod tests {
 
     #[test]
     fn execute_burn_balance() {
-        let mut instance = proper_initialization();
+        let funds: [Coin; 0] = [];
+        let mut instance = proper_initialization(&funds);
 
         // create a burn balance  message
         let msg = ExecuteMsg::BurnContractBalance {};
         let info = mock_info(&instance.owner, &[]);
-        let _res = execute(instance.deps.as_mut(), mock_env(), info, msg).unwrap();
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
         assert_eq!(_res.attributes.len(), 1);
         assert_eq!(
             _res.attributes[0],
@@ -106,7 +136,117 @@ mod tests {
         );
     }
 
-    // todo ExecuteMsg::BurnDailyQuota
+    #[test]
+    fn execute_burn_daily_quota() {
+        const EXTRA_FUNDS: u128 = 123456u128;
+        let funds = coins(DEFAULT_DAILY_QUOTA + EXTRA_FUNDS, "stake");
+        let mut instance = proper_initialization(&funds);
+
+        // Here we set the block time
+        instance.env.block.time = Timestamp::from_seconds(0);
+
+        // TEST CASE 1;
+        // we instantiate the contract with a balance > than the daily quota
+        let info = mock_info(&instance.owner, &[]);
+        let msg = ExecuteMsg::BurnDailyQuota {};
+
+        // when called the first time, it should burn the daily quota
+        // we can inspect the returned params
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
+        assert_eq!(_res.attributes.len(), 1);
+        assert_eq!(
+            _res.attributes[0],
+            Attribute {
+                key: String::from("method"),
+                value: String::from("execute_burn_daily_quota")
+            }
+        );
+        assert_eq!(_res.messages.len(), 1);
+        assert_eq!(
+            _res.messages[0].msg,
+            CosmosMsg::Bank(BankMsg::Burn {
+                amount: vec![Coin {
+                    denom: String::from("stake"),
+                    amount: Uint128::from(DEFAULT_DAILY_QUOTA),
+                }]
+            })
+        );
+
+        // we then query the contract balance to see if it tallies with expectation
+        let msg = QueryMsg::QueryBalance {
+            denom: String::from("stake"),
+        };
+        let res = query(instance.deps.as_ref(), instance.env.clone(), msg).unwrap();
+        let balance: BalanceResponse = from_binary(&res).unwrap();
+        assert_eq!(
+            balance,
+            BalanceResponse {
+                amount: Coin {
+                    amount: Uint128::from(EXTRA_FUNDS),
+                    denom: String::from("stake"),
+                },
+            },
+        );
+
+        // TEST CASE 2;
+        let msg = ExecuteMsg::BurnDailyQuota {};
+        let info = mock_info(&instance.owner, &[]);
+
+        // when called again it should not allow us to burn
+        // this is because the next burn duration has not been reached
+        let _err = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap_err();
+        match _err {
+            ContractError::DailyBurnNotReady {} => {}
+            e => panic!("unexpected error: {}", e),
+        }
+
+        // TEST CASE 3;
+        let msg = ExecuteMsg::BurnDailyQuota {};
+        let info = mock_info(&instance.owner, &[]);
+
+        // we can fast foward the time and call the method again this time,
+        let twenty_four_hours_from_now =
+            Timestamp::from_seconds(0).plus_seconds(BURN_DELAY_SECONDS);
+        instance.env.block.time = twenty_four_hours_from_now.plus_seconds(3600);
+
+        // it should allow us to call the function beacuse contract balance
+        // is now less than dailyQuota, it should burn all balance
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
+        // we can inspect the returned params
+        assert_eq!(_res.attributes.len(), 1);
+        assert_eq!(
+            _res.attributes[0],
+            Attribute {
+                key: String::from("method"),
+                value: String::from("execute_burn_daily_quota")
+            }
+        );
+        assert_eq!(_res.messages.len(), 1);
+        assert_eq!(
+            _res.messages[0].msg,
+            CosmosMsg::Bank(BankMsg::Burn {
+                amount: vec![Coin {
+                    denom: String::from("stake"),
+                    amount: Uint128::from(EXTRA_FUNDS),
+                }]
+            })
+        );
+
+        // TEST CASE 4;
+        // we can verify this by calling the method again which should return a contract
+        // error stating there is no tokens to burn
+        let msg = ExecuteMsg::BurnDailyQuota {};
+        let info = mock_info(&instance.owner, &[]);
+
+        // when called again it should not allow us to burn
+        // this is because the next burn duration has not been reached
+        let _err = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap_err();
+        match _err {
+            ContractError::InsufficientContractBalance {} => {}
+            e => panic!("unexpected error: {}", e),
+        }
+    }
+
     // todo ExecuteMsg::SetMaxDailyBurn
     // todo ExecuteMsg::WithdrawFundsToCommunityPool
 }

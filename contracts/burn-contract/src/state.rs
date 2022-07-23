@@ -19,3 +19,6 @@ pub const BURN_READY_TIMESTAMP: Item<Timestamp> = Item::new("burn_ready_timestam
 
 // This stores the burn_delay in seconds
 pub const BURN_DELAY_SECONDS: u64 = 86400u64;
+
+// This stores the default daily quota
+pub const DEFAULT_DAILY_QUOTA: u128 = 500_000_000_000_000u128;
