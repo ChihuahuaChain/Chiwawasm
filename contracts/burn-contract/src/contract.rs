@@ -7,7 +7,7 @@ use cosmwasm_std::{
 
 use crate::error::ContractError;
 use crate::helpers;
-use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg, SudoMsg};
 use crate::state::{Config, BURN_READY_TIMESTAMP, INIT_CONFIG};
 
 // version info for migration info
@@ -63,15 +63,6 @@ pub fn execute(
         ExecuteMsg::BurnDailyQuota {} => execute_burn_daily_quota(deps, env),
         ExecuteMsg::TransferContractOwnership { new_owner } => {
             execute_transfer_owner(deps, info, new_owner)
-        }
-
-        // todo
-        ExecuteMsg::SetMaxDailyBurn { amount } => {
-            execute_set_max_daily_burn(deps, info, env, amount)
-        }
-        // todo
-        ExecuteMsg::WithdrawFundsToCommunityPool {} => {
-            execute_withdraw_funds_to_community_pool(deps, info, env)
         }
     }
 }
@@ -173,9 +164,19 @@ fn execute_transfer_owner(
         .add_attribute("new_owner", updated_config.owner))
 }
 
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
+    match msg {
+        SudoMsg::SetMaxDailyBurn { amount } => execute_set_max_daily_burn(deps, env, amount),
+        SudoMsg::WithdrawFundsToCommunityPool {} => {
+            execute_withdraw_funds_to_community_pool(deps, env)
+        }
+    }
+}
+
+// todo
 fn execute_set_max_daily_burn(
     deps: DepsMut,
-    info: MessageInfo,
     env: Env,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
@@ -185,9 +186,9 @@ fn execute_set_max_daily_burn(
     Ok(res)
 }
 
+// todo
 fn execute_withdraw_funds_to_community_pool(
     deps: DepsMut,
-    info: MessageInfo,
     env: Env,
 ) -> Result<Response, ContractError> {
     // Build response

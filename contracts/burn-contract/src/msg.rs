@@ -16,8 +16,13 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     BurnContractBalance {},
     BurnDailyQuota {},
-    SetMaxDailyBurn { amount: Uint128 },
     TransferContractOwnership { new_owner: String },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SudoMsg {
+    SetMaxDailyBurn { amount: Uint128 },
     WithdrawFundsToCommunityPool {},
 }
 
