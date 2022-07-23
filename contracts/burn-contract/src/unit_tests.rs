@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::testing::{
-        mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info, MockApi,
-        MockQuerier,
+        mock_dependencies_with_balance, mock_env, mock_info, MockApi, MockQuerier,
     };
     use cosmwasm_std::{
         coins, from_binary, Attribute, BalanceResponse, BankMsg, Coin, CosmosMsg, Empty, Env,
@@ -11,10 +10,11 @@ mod tests {
 
     use crate::contract::{execute, instantiate, query};
     use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-    use crate::state::{BURN_DELAY_SECONDS, DEFAULT_DAILY_QUOTA};
     use crate::ContractError;
 
     const NATIVE_DENOM: &str = "udenom";
+    const DEFAULT_DAILY_QUOTA: u128 = 500_000_000_000_000u128;
+    const BURN_DELAY_SECONDS: u64 = 86400u64;
 
     // Here we create a struct for instatation config
     struct InstantiationResponse {
@@ -34,6 +34,8 @@ mod tests {
             owner: Some(owner.clone()),
             community_pool_address,
             native_denom: String::from(NATIVE_DENOM),
+            daily_burn_amount: Uint128::from(DEFAULT_DAILY_QUOTA),
+            burn_delay_seconds: BURN_DELAY_SECONDS,
         };
 
         // we can just call .unwrap() to assert this was a success

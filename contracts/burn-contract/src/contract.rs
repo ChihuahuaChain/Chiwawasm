@@ -2,13 +2,13 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     to_binary, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, Timestamp, Uint128,
+    StdResult, Uint128,
 };
 
 use crate::error::ContractError;
 use crate::helpers;
 use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{Config, BURN_READY_TIMESTAMP, DEFAULT_DAILY_QUOTA, INIT_CONFIG};
+use crate::state::{Config, BURN_READY_TIMESTAMP, INIT_CONFIG};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:my-first-contract";
@@ -33,8 +33,8 @@ pub fn instantiate(
     let config = Config {
         community_pool_address: deps.api.addr_validate(&msg.community_pool_address)?,
         owner: owner.clone(),
-        // here we initialize the default daily burn amount
-        daily_burn_amount: DEFAULT_DAILY_QUOTA,
+        daily_burn_amount: msg.daily_burn_amount,
+        burn_delay_seconds: msg.burn_delay_seconds,
         native_denom: msg.native_denom,
     };
 

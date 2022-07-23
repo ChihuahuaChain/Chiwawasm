@@ -7,6 +7,8 @@ pub struct InstantiateMsg {
     pub owner: Option<String>,
     pub community_pool_address: String,
     pub native_denom: String,
+    pub daily_burn_amount: Uint128,
+    pub burn_delay_seconds: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
