@@ -24,7 +24,6 @@ pub fn instantiate(
     cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let config = Config {
-        community_pool_address: deps.api.addr_validate(&msg.community_pool_address)?,
         daily_burn_amount: msg.daily_burn_amount,
         burn_delay_seconds: msg.burn_delay_seconds,
         native_denom: msg.native_denom,
@@ -107,8 +106,8 @@ fn execute_burn_daily_quota(deps: DepsMut, env: Env) -> Result<Response, Contrac
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
         SudoMsg::SetMaxDailyBurn { amount } => execute_set_max_daily_burn(deps, env, amount),
-        SudoMsg::WithdrawFundsToCommunityPool {} => {
-            execute_withdraw_funds_to_community_pool(deps, env)
+        SudoMsg::WithdrawFundsToCommunityPool { address } => {
+            execute_withdraw_funds_to_community_pool(deps, env, address)
         }
     }
 }
@@ -129,8 +128,10 @@ fn execute_set_max_daily_burn(
 fn execute_withdraw_funds_to_community_pool(
     deps: DepsMut,
     env: Env,
+    address: String,
 ) -> Result<Response, ContractError> {
     // Build response
+    // deps.api.addr_validate(&address)?,
     let res = Response::new().add_attribute("method", "execute_set_max_daily_burn");
 
     Ok(res)

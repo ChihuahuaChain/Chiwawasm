@@ -28,10 +28,8 @@ mod tests {
         let mut deps = mock_dependencies_with_balance(contract_balances);
         let env = mock_env();
         let owner = String::from("creator");
-        let community_pool_address = String::from("pool_address");
 
         let msg = InstantiateMsg {
-            community_pool_address,
             native_denom: String::from(NATIVE_DENOM),
             daily_burn_amount: Uint128::from(DEFAULT_DAILY_QUOTA),
             burn_delay_seconds: BURN_DELAY_SECONDS,

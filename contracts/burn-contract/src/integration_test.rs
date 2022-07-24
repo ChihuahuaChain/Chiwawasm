@@ -48,12 +48,10 @@ mod tests {
     fn mock_instantiate(funds: &[Coin]) -> InstantiationResponse {
         let mut app = mock_app();
         let cw_template_id = app.store_code(contract_template());
-        let community_pool_address = String::from("community_pool_address");
         let burn_delay_seconds = BURN_DELAY_SECONDS;
         let daily_burn_amount = Uint128::from(DEFAULT_DAILY_QUOTA);
 
         let msg = InstantiateMsg {
-            community_pool_address,
             burn_delay_seconds,
             daily_burn_amount,
             native_denom: String::from(NATIVE_DENOM),
