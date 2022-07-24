@@ -9,7 +9,6 @@ pub struct Config {
     pub community_pool_address: Addr,
     pub daily_burn_amount: Uint128,
     pub burn_delay_seconds: u64,
-    pub owner: Addr,
     pub native_denom: String,
 }
 

@@ -31,7 +31,6 @@ mod tests {
         let community_pool_address = String::from("pool_address");
 
         let msg = InstantiateMsg {
-            owner: Some(owner.clone()),
             community_pool_address,
             native_denom: String::from(NATIVE_DENOM),
             daily_burn_amount: Uint128::from(DEFAULT_DAILY_QUOTA),
@@ -50,102 +49,6 @@ mod tests {
 
         // return reusable data
         InstantiationResponse { deps, owner, env }
-    }
-
-    #[test]
-    fn execute_transfer_owner_should_fail_when_called_by_old_owner() {
-        let funds: [Coin; 0] = [];
-        let mut instance = proper_initialization(&funds);
-
-        // create a transfer owner message
-        let info = mock_info(&instance.owner, &[]);
-        let msg = ExecuteMsg::TransferContractOwnership {
-            new_owner: String::from("new_contract_owner"),
-        };
-
-        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
-        assert_eq!(_res.attributes.len(), 2);
-
-        // Here we try to call transfer owner with the old owner which should fail
-        let info = mock_info(&instance.owner, &[]);
-        let msg = ExecuteMsg::TransferContractOwnership {
-            new_owner: String::from("another_owner"),
-        };
-        let _err = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap_err();
-        match _err {
-            ContractError::Unauthorized {} => {}
-            e => panic!("unexpected error: {}", e),
-        }
-    }
-
-    #[test]
-    fn execute_transfer_owner_should_pass_when_called_by_new_owner() {
-        let funds: [Coin; 0] = [];
-        let mut instance = proper_initialization(&funds);
-
-        // create a transfer new_owner message
-        let new_owner = String::from("new_owner");
-        let info = mock_info(&instance.owner, &[]);
-        let msg = ExecuteMsg::TransferContractOwnership {
-            new_owner: new_owner.clone(),
-        };
-
-        // here we ensure that transfer ownership works
-        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
-        assert_eq!(_res.attributes.len(), 2);
-
-        // Here we try to call transfer ownership with the new owner
-        let info = mock_info(&new_owner, &[]);
-        let msg = ExecuteMsg::TransferContractOwnership {
-            new_owner: String::from("new_contract_owner"),
-        };
-        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
-        assert_eq!(_res.attributes.len(), 2);
-        assert_eq!(
-            _res.attributes[0],
-            Attribute {
-                key: String::from("method"),
-                value: String::from("execute_transfer_owner")
-            }
-        );
-        assert_eq!(
-            _res.attributes[1],
-            Attribute {
-                key: String::from("new_owner"),
-                value: String::from("new_contract_owner"),
-            }
-        );
-    }
-
-    #[test]
-    fn execute_burn_balance() {
-        let funds = coins(DEFAULT_DAILY_QUOTA, NATIVE_DENOM);
-        let mut instance = proper_initialization(&funds);
-
-        // create a burn balance  message
-        let msg = ExecuteMsg::BurnContractBalance {};
-        let info = mock_info(&instance.owner, &[]);
-        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
-        assert_eq!(_res.attributes.len(), 1);
-        assert_eq!(
-            _res.attributes[0],
-            Attribute {
-                key: String::from("method"),
-                value: String::from("execute_burn_balance")
-            }
-        );
-
-        // check the messages in the response to see if the burn method was called
-        assert_eq!(_res.messages.len(), 1);
-        assert_eq!(
-            _res.messages[0].msg,
-            CosmosMsg::Bank(BankMsg::Burn {
-                amount: vec![Coin {
-                    denom: String::from(NATIVE_DENOM),
-                    amount: Uint128::from(DEFAULT_DAILY_QUOTA),
-                }]
-            })
-        );
     }
 
     #[test]

@@ -6,7 +6,6 @@ use cosmwasm_std::{
 };
 
 use crate::error::ContractError;
-use crate::helpers;
 use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg, SudoMsg};
 use crate::state::{Config, BURN_READY_TIMESTAMP, INIT_CONFIG};
 
@@ -18,21 +17,14 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     //Store the contract name and version
     cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    // Get the owner of the contract
-    let owner = msg
-        .owner
-        .and_then(|addr_str| deps.api.addr_validate(addr_str.as_str()).ok())
-        .unwrap_or(info.sender);
-
     let config = Config {
         community_pool_address: deps.api.addr_validate(&msg.community_pool_address)?,
-        owner: owner.clone(),
         daily_burn_amount: msg.daily_burn_amount,
         burn_delay_seconds: msg.burn_delay_seconds,
         native_denom: msg.native_denom,
@@ -46,50 +38,19 @@ pub fn instantiate(
     BURN_READY_TIMESTAMP.save(deps.storage, &now)?;
 
     // return response
-    Ok(Response::new()
-        .add_attribute("method", "instantiate")
-        .add_attribute("owner", owner))
+    Ok(Response::new().add_attribute("method", "instantiate"))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::BurnContractBalance {} => execute_burn_balance(deps, info, env),
         ExecuteMsg::BurnDailyQuota {} => execute_burn_daily_quota(deps, env),
-        ExecuteMsg::TransferContractOwnership { new_owner } => {
-            execute_transfer_owner(deps, info, new_owner)
-        }
     }
-}
-
-fn execute_burn_balance(
-    deps: DepsMut,
-    info: MessageInfo,
-    env: Env,
-) -> Result<Response, ContractError> {
-    helpers::verify_caller_is_admin(&info, &deps)?;
-
-    // Get the contract balances
-    let amount = deps.querier.query_all_balances(&env.contract.address)?;
-
-    // create a burn message
-    let burn_msg = BankMsg::Burn { amount };
-
-    // Then we add the message to the response
-    let msgs: Vec<CosmosMsg> = vec![burn_msg.into()];
-
-    // Build response
-    let res = Response::new()
-        .add_attribute("method", "execute_burn_balance")
-        .add_messages(msgs);
-
-    // return response
-    Ok(res)
 }
 
 fn execute_burn_daily_quota(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
@@ -140,28 +101,6 @@ fn execute_burn_daily_quota(deps: DepsMut, env: Env) -> Result<Response, Contrac
 
     // return response
     Ok(res)
-}
-
-fn execute_transfer_owner(
-    deps: DepsMut,
-    info: MessageInfo,
-    new_owner: String,
-) -> Result<Response, ContractError> {
-    helpers::verify_caller_is_admin(&info, &deps)?;
-
-    // validate new owner
-    let new_owner = deps.api.addr_validate(&new_owner)?;
-
-    // Here we update the owner in the config
-    let updated_config = INIT_CONFIG.update(deps.storage, |mut data| -> StdResult<_> {
-        data.owner = new_owner;
-
-        Ok(data)
-    })?;
-
-    Ok(Response::new()
-        .add_attribute("method", "execute_transfer_owner")
-        .add_attribute("new_owner", updated_config.owner))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
