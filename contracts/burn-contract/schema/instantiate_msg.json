@@ -4,7 +4,6 @@
   "type": "object",
   "required": [
     "burn_delay_seconds",
-    "community_pool_address",
     "daily_burn_amount",
     "native_denom"
   ],
@@ -14,20 +13,11 @@
       "format": "uint64",
       "minimum": 0.0
     },
-    "community_pool_address": {
-      "type": "string"
-    },
     "daily_burn_amount": {
       "$ref": "#/definitions/Uint128"
     },
     "native_denom": {
       "type": "string"
-    },
-    "owner": {
-      "type": [
-        "string",
-        "null"
-      ]
     }
   },
   "definitions": {
