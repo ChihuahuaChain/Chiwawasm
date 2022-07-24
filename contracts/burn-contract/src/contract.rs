@@ -24,7 +24,7 @@ pub fn instantiate(
     cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let config = Config {
-        daily_burn_amount: msg.daily_burn_amount,
+        daily_burn_amount: Uint128::from(msg.daily_burn_amount),
         burn_delay_seconds: msg.burn_delay_seconds,
         native_denom: msg.native_denom,
     };

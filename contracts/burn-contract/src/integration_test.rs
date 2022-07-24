@@ -49,7 +49,7 @@ mod tests {
         let mut app = mock_app();
         let cw_template_id = app.store_code(contract_template());
         let burn_delay_seconds = BURN_DELAY_SECONDS;
-        let daily_burn_amount = Uint128::from(DEFAULT_DAILY_QUOTA);
+        let daily_burn_amount = DEFAULT_DAILY_QUOTA;
 
         let msg = InstantiateMsg {
             burn_delay_seconds,

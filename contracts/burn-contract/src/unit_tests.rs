@@ -31,7 +31,7 @@ mod tests {
 
         let msg = InstantiateMsg {
             native_denom: String::from(NATIVE_DENOM),
-            daily_burn_amount: Uint128::from(DEFAULT_DAILY_QUOTA),
+            daily_burn_amount: DEFAULT_DAILY_QUOTA,
             burn_delay_seconds: BURN_DELAY_SECONDS,
         };
 
