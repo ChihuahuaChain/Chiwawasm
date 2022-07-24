@@ -4,8 +4,8 @@ mod tests {
         mock_dependencies_with_balance, mock_env, mock_info, MockApi, MockQuerier,
     };
     use cosmwasm_std::{
-        coins, from_binary, Attribute, BalanceResponse, BankMsg, Coin, CosmosMsg, Empty, Env,
-        MemoryStorage, OwnedDeps, Timestamp, Uint128,
+        coins, from_binary, Attribute, BankMsg, Coin, CosmosMsg, Empty, Env, MemoryStorage,
+        OwnedDeps, Uint128,
     };
 
     use crate::contract::{execute, instantiate, query};
@@ -44,7 +44,7 @@ mod tests {
         assert_eq!(0, _res.messages.len());
 
         // query and verify state
-        let res = query(deps.as_ref(), env.clone(), QueryMsg::GetConfig {}).unwrap();
+        let res = query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap();
         let contract_config = from_binary(&res).unwrap();
         assert_eq!(msg, contract_config);
 
@@ -53,7 +53,7 @@ mod tests {
     }
 
     #[test]
-    fn execute_transfer_owner() {
+    fn execute_transfer_owner_should_fail_when_called_by_old_owner() {
         let funds: [Coin; 0] = [];
         let mut instance = proper_initialization(&funds);
 
@@ -63,6 +63,42 @@ mod tests {
             new_owner: String::from("new_contract_owner"),
         };
 
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
+        assert_eq!(_res.attributes.len(), 2);
+
+        // Here we try to call transfer owner with the old owner which should fail
+        let info = mock_info(&instance.owner, &[]);
+        let msg = ExecuteMsg::TransferContractOwnership {
+            new_owner: String::from("another_owner"),
+        };
+        let _err = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap_err();
+        match _err {
+            ContractError::Unauthorized {} => {}
+            e => panic!("unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn execute_transfer_owner_should_pass_when_called_by_new_owner() {
+        let funds: [Coin; 0] = [];
+        let mut instance = proper_initialization(&funds);
+
+        // create a transfer new_owner message
+        let new_owner = String::from("new_owner");
+        let info = mock_info(&instance.owner, &[]);
+        let msg = ExecuteMsg::TransferContractOwnership {
+            new_owner: new_owner.clone(),
+        };
+
+        // here we ensure that transfer ownership works
+        let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
+        assert_eq!(_res.attributes.len(), 2);
+
+        // Here we try to call transfer ownership with the new owner
+        let info = mock_info(&new_owner, &[]);
+        let msg = ExecuteMsg::TransferContractOwnership {
+            new_owner: String::from("new_contract_owner"),
+        };
         let _res = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap();
         assert_eq!(_res.attributes.len(), 2);
         assert_eq!(
@@ -79,17 +115,6 @@ mod tests {
                 value: String::from("new_contract_owner"),
             }
         );
-
-        // Here we try to call transfer owner with the old owner which should fail
-        let info = mock_info(&instance.owner, &[]);
-        let msg = ExecuteMsg::TransferContractOwnership {
-            new_owner: String::from("another_owner"),
-        };
-        let _err = execute(instance.deps.as_mut(), instance.env.clone(), info, msg).unwrap_err();
-        match _err {
-            ContractError::Unauthorized {} => {}
-            e => panic!("unexpected error: {}", e),
-        }
     }
 
     #[test]
@@ -293,6 +318,6 @@ mod tests {
         }
     }
 
-    // todo ExecuteMsg::SetMaxDailyBurn
-    // todo ExecuteMsg::WithdrawFundsToCommunityPool
+    // todo SudoMsg::SetMaxDailyBurn
+    // todo SudoMsg::WithdrawFundsToCommunityPool
 }

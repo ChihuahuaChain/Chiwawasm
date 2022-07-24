@@ -201,8 +201,8 @@ fn execute_withdraw_funds_to_community_pool(
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     // Match and route the query message to the appropriate handler
     match msg {
-        QueryMsg::QueryBalance {} => to_binary(&query_balance(deps, env)?),
-        QueryMsg::GetConfig {} => to_binary(&query_config(deps)?),
+        QueryMsg::Balance {} => to_binary(&query_balance(deps, env)?),
+        QueryMsg::Config {} => to_binary(&query_config(deps)?),
     }
 }
 
