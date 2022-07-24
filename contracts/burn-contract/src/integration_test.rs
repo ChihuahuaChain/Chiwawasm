@@ -2,6 +2,7 @@
 mod tests {
     use crate::helpers::CwTemplateContract;
     use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, SudoMsg};
+    use crate::state::Config;
 
     use cosmwasm_std::{coins, Addr, BalanceResponse, BlockInfo, Coin, Empty, Uint128};
     use cw_multi_test::{App, AppBuilder, AppResponse, Contract, ContractWrapper, Executor};
@@ -19,7 +20,7 @@ mod tests {
     const NATIVE_DENOM: &str = "udenom";
     const DEFAULT_DAILY_QUOTA: u128 = 500_000_000_000_000u128;
     const BURN_DELAY_SECONDS: u64 = 86400u64;
-    const USER: &str = "USER";
+    const USER: &str = "user";
 
     // Here we create a struct for instatation config
     struct InstantiationResponse {
@@ -93,6 +94,12 @@ mod tests {
     fn get_balance(app: &mut App, contract_address: Addr) -> BalanceResponse {
         let msg = QueryMsg::Balance {};
         let result: BalanceResponse = app.wrap().query_wasm_smart(contract_address, &msg).unwrap();
+        result
+    }
+
+    fn get_config(app: &mut App, contract_address: Addr) -> Config {
+        let msg = QueryMsg::Config {};
+        let result: Config = app.wrap().query_wasm_smart(contract_address, &msg).unwrap();
         result
     }
 
@@ -191,6 +198,47 @@ mod tests {
 
     #[test]
     fn execute_transfer_owner() {
-        // todo
+        // create a contract instance with balance set to the daily burn amount
+        let mut instance = mock_instantiate(&[]);
+
+        // we try to call transfer owner with ANOTHER which should fail
+        let another = String::from("another");
+        let sender = Addr::unchecked(another.clone());
+
+        let msg = ExecuteMsg::TransferContractOwnership { new_owner: another };
+        let cosmos_msg = instance.c_template.call(msg).unwrap();
+        instance.app.execute(sender, cosmos_msg).unwrap_err();
+
+        // we try again this time with the USER transferring ownership to ANOTHER
+        // which should be successful
+        let another = String::from("another");
+        let sender = Addr::unchecked(USER);
+
+        let msg = ExecuteMsg::TransferContractOwnership { new_owner: another };
+        let cosmos_msg = instance.c_template.call(msg).unwrap();
+        instance.app.execute(sender, cosmos_msg).unwrap();
+
+        // we try to call transfer owner again with the USER which should fail
+        let another = String::from("another");
+        let sender = Addr::unchecked(USER);
+
+        let msg = ExecuteMsg::TransferContractOwnership { new_owner: another };
+        let cosmos_msg = instance.c_template.call(msg).unwrap();
+        instance.app.execute(sender, cosmos_msg).unwrap_err();
+
+        // we try to transfer ownership to the USER from ANOTHER which should be successful
+        let another = String::from("another");
+        let sender = Addr::unchecked(another);
+
+        let msg = ExecuteMsg::TransferContractOwnership {
+            new_owner: String::from(USER),
+        };
+        print!("Here we are ");
+        let cosmos_msg = instance.c_template.call(msg).unwrap();
+        instance.app.execute(sender, cosmos_msg).unwrap();
+
+        // we can verify this by querying the config to make sure ownership has been returned to USER
+        let config = get_config(&mut instance.app, instance.c_addr.clone());
+        assert_eq!(Addr::unchecked(USER), config.owner,);
     }
 }
