@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod tests {
     use crate::helpers::CwTemplateContract;
-    use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+    use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, SudoMsg};
+    use crate::state::Config;
 
     use cosmwasm_std::{Addr, BalanceResponse, BlockInfo, Coin, Empty, Uint128};
-    use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
+    use cw_multi_test::{App, AppBuilder, AppResponse, Contract, ContractWrapper, Executor};
 
     pub fn contract_template() -> Box<dyn Contract<Empty>> {
         let contract = ContractWrapper::new(
@@ -92,9 +93,33 @@ mod tests {
         result
     }
 
+    fn get_config(app: &mut App, contract_address: Addr) -> Config {
+        let msg = QueryMsg::Config {};
+        let result: Config = app.wrap().query_wasm_smart(contract_address, &msg).unwrap();
+        result
+    }
+
+    fn execute_sudo_set_max_daily_burn(
+        app: &mut App,
+        c_address: Addr,
+        amount: u128,
+    ) -> anyhow::Result<AppResponse> {
+        let msg = SudoMsg::SetMaxDailyBurn { amount };
+        app.wasm_sudo(c_address, &msg)
+    }
+
+    fn execute_sudo_withdraw_funds_to_community_pool(
+        app: &mut App,
+        contract_address: Addr,
+        address: String,
+    ) -> anyhow::Result<AppResponse> {
+        let msg = SudoMsg::WithdrawFundsToCommunityPool { address };
+        app.wasm_sudo(contract_address, &msg)
+    }
+
     #[test]
     fn execute_burn_daily_quota() {
-        // create a contract instance with funds greater than the daily burn amount
+        // create an instance of the chain with funds greater than the daily burn amount
         const EXTRA_FUNDS: u128 = 123456u128;
         let funds = [Coin {
             denom: String::from(NATIVE_DENOM),
@@ -155,5 +180,24 @@ mod tests {
 
         instance.app.update_block(advance_one_hour_after_delay);
         instance.app.execute(sender, cosmos_msg).unwrap_err();
+    }
+
+    #[test]
+    fn sudo_set_max_daily_burn() {
+        // we get an instance of the chain
+        let mut instance = mock_instantiate(&[]);
+
+        // verify that the daily_burn_amount is DEFAULT_DAILY_QUOTA
+        let config = get_config(&mut instance.app, instance.c_addr.clone());
+        assert_eq!(config.daily_burn_amount, Uint128::from(DEFAULT_DAILY_QUOTA));
+
+        // here we try to call the sudo method to set daily_burn_amount
+        let new_amount = 123456u128;
+        execute_sudo_set_max_daily_burn(&mut instance.app, instance.c_addr.clone(), new_amount)
+            .unwrap();
+
+        // verify that the daily_burn_amount is new_amount
+        let config = get_config(&mut instance.app, instance.c_addr);
+        assert_eq!(config.daily_burn_amount, Uint128::from(new_amount));
     }
 }

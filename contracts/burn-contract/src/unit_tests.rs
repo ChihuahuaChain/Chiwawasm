@@ -8,8 +8,9 @@ mod tests {
         OwnedDeps, Uint128,
     };
 
-    use crate::contract::{execute, instantiate, query};
-    use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+    use crate::contract::{execute, instantiate, query, sudo};
+    use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, SudoMsg};
+    use crate::state::Config;
     use crate::ContractError;
 
     const NATIVE_DENOM: &str = "udenom";
@@ -219,6 +220,40 @@ mod tests {
         }
     }
 
-    // todo SudoMsg::SetMaxDailyBurn
-    // todo SudoMsg::WithdrawFundsToCommunityPool
+    #[test]
+    fn sudo_set_max_daily_burn() {
+        let mut instance = proper_initialization(&[]);
+
+        // we call the sudo method to update the daliy_burn_amount
+        let amount = 100u128;
+        let msg = SudoMsg::SetMaxDailyBurn { amount };
+        let res = sudo(instance.deps.as_mut(), instance.env.clone(), msg).unwrap();
+
+        // assert that expected response is gotten
+        assert_eq!(res.attributes.len(), 2);
+        assert_eq!(
+            res.attributes[0],
+            Attribute {
+                key: String::from("method"),
+                value: String::from("sudo_set_max_daily_burn")
+            }
+        );
+        assert_eq!(
+            res.attributes[1],
+            Attribute {
+                key: String::from("daily_burn_amount"),
+                value: amount.to_string(),
+            }
+        );
+
+        // query and verify state
+        let res = query(instance.deps.as_ref(), instance.env, QueryMsg::Config {}).unwrap();
+        let config: Config = from_binary(&res).unwrap();
+        assert_eq!(Uint128::from(amount), config.daily_burn_amount);
+    }
+
+    #[test]
+    fn sudo_withdraw_funds_to_community_pool() {
+        // todo
+    }
 }

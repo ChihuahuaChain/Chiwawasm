@@ -105,35 +105,35 @@ fn execute_burn_daily_quota(deps: DepsMut, env: Env) -> Result<Response, Contrac
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
-        SudoMsg::SetMaxDailyBurn { amount } => execute_set_max_daily_burn(deps, env, amount),
+        SudoMsg::SetMaxDailyBurn { amount } => sudo_set_max_daily_burn(deps, amount),
         SudoMsg::WithdrawFundsToCommunityPool { address } => {
-            execute_withdraw_funds_to_community_pool(deps, env, address)
+            sudo_withdraw_funds_to_community_pool(deps, env, address)
         }
     }
 }
 
-// todo
-fn execute_set_max_daily_burn(
-    deps: DepsMut,
-    env: Env,
-    amount: Uint128,
-) -> Result<Response, ContractError> {
-    // Build response
-    let res = Response::new().add_attribute("method", "execute_set_max_daily_burn");
+fn sudo_set_max_daily_burn(deps: DepsMut, amount: u128) -> Result<Response, ContractError> {
+    // Here we update the owner in the config
+    let updated_config = INIT_CONFIG.update(deps.storage, |mut data| -> StdResult<_> {
+        data.daily_burn_amount = Uint128::from(amount);
 
-    Ok(res)
+        Ok(data)
+    })?;
+
+    Ok(Response::new()
+        .add_attribute("method", "sudo_set_max_daily_burn")
+        .add_attribute("daily_burn_amount", updated_config.daily_burn_amount))
 }
 
 // todo
-fn execute_withdraw_funds_to_community_pool(
+fn sudo_withdraw_funds_to_community_pool(
     deps: DepsMut,
     env: Env,
     address: String,
 ) -> Result<Response, ContractError> {
     // Build response
     // deps.api.addr_validate(&address)?,
-    let res = Response::new().add_attribute("method", "execute_set_max_daily_burn");
-
+    let res = Response::new().add_attribute("method", "sudo_withdraw_funds_to_community_pool");
     Ok(res)
 }
 

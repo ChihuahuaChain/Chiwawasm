@@ -18,7 +18,7 @@ pub enum ExecuteMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SudoMsg {
-    SetMaxDailyBurn { amount: Uint128 },
+    SetMaxDailyBurn { amount: u128 },
     WithdrawFundsToCommunityPool { address: String },
 }
 
