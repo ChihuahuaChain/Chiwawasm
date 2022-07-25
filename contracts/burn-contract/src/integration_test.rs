@@ -108,7 +108,7 @@ mod tests {
         app.wasm_sudo(c_address, &msg)
     }
 
-    fn execute_sudo_withdraw_funds_to_community_pool(
+    fn execute_sudo_withdraw_funds_to_address(
         app: &mut App,
         contract_address: Addr,
         address: String,
@@ -199,5 +199,27 @@ mod tests {
         // verify that the daily_burn_amount is new_amount
         let config = get_config(&mut instance.app, instance.c_addr);
         assert_eq!(config.daily_burn_amount, Uint128::from(new_amount));
+    }
+
+    #[test]
+    fn sudo_withdraw_funds_to_address() {
+        // instantiate the blockchain with a balance
+        let funds = [Coin {
+            denom: String::from(NATIVE_DENOM),
+            amount: Uint128::from(DEFAULT_DAILY_QUOTA),
+        }];
+        let mut instance = mock_instantiate(&funds);
+
+        // move the funds out of the contract by calling sudo_withdraw_funds_to_address
+        let address = String::from("destination_addr");
+        execute_sudo_withdraw_funds_to_address(&mut instance.app, instance.c_addr.clone(), address)
+            .unwrap();
+
+        // try to call the burn daily quota after funds have been moved out
+        // and it should return eror due to InsufficientContractBalance
+        let sender = Addr::unchecked(USER);
+        let msg = ExecuteMsg::BurnDailyQuota {};
+        let cosmos_msg = instance.c_template.call(msg).unwrap();
+        instance.app.execute(sender, cosmos_msg).unwrap_err();
     }
 }

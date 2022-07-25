@@ -253,7 +253,73 @@ mod tests {
     }
 
     #[test]
-    fn sudo_withdraw_funds_to_community_pool() {
-        // todo
+    fn sudo_withdraw_funds_to_address_should_suceed_with_balance() {
+        let funds = coins(DEFAULT_DAILY_QUOTA, NATIVE_DENOM);
+        let mut instance = proper_initialization(&funds);
+
+        // we call the sudo method to withdraw funds from the community pool
+        let address = String::from("destination_addr");
+        let msg = SudoMsg::WithdrawFundsToCommunityPool {
+            address: address.clone(),
+        };
+        let _res = sudo(instance.deps.as_mut(), instance.env.clone(), msg).unwrap();
+
+        // we can inspect the returned params
+        assert_eq!(_res.attributes.len(), 1);
+        assert_eq!(
+            _res.attributes[0],
+            Attribute {
+                key: String::from("method"),
+                value: String::from("sudo_withdraw_funds_to_address")
+            }
+        );
+        assert_eq!(_res.messages.len(), 1);
+        assert_eq!(
+            _res.messages[0].msg,
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: address,
+                amount: vec![Coin {
+                    denom: String::from(NATIVE_DENOM),
+                    amount: Uint128::from(DEFAULT_DAILY_QUOTA),
+                }]
+            })
+        );
+    }
+
+    #[test]
+    fn sudo_withdraw_funds_to_address_should_fail_with_zero_balance() {
+        let funds = coins(0u128, NATIVE_DENOM);
+        let mut instance = proper_initialization(&funds);
+
+        // we call the sudo method to withdraw funds from the community pool
+        let address = String::from("destination_addr");
+        let msg = SudoMsg::WithdrawFundsToCommunityPool {
+            address: address.clone(),
+        };
+        let _err = sudo(instance.deps.as_mut(), instance.env.clone(), msg).unwrap_err();
+
+        // we expect the InsufficientContractBalance
+        match _err {
+            ContractError::InsufficientContractBalance {} => {}
+            e => panic!("unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn sudo_withdraw_funds_to_address_should_fail_with_no_balance() {
+        let mut instance = proper_initialization(&[]);
+
+        // we call the sudo method to withdraw funds from the community pool
+        let address = String::from("destination_addr");
+        let msg = SudoMsg::WithdrawFundsToCommunityPool {
+            address: address.clone(),
+        };
+        let _err = sudo(instance.deps.as_mut(), instance.env.clone(), msg).unwrap_err();
+
+        // we expect the InsufficientContractBalance
+        match _err {
+            ContractError::InsufficientContractBalance {} => {}
+            e => panic!("unexpected error: {}", e),
+        }
     }
 }

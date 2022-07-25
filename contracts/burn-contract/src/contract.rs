@@ -107,7 +107,7 @@ pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractE
     match msg {
         SudoMsg::SetMaxDailyBurn { amount } => sudo_set_max_daily_burn(deps, amount),
         SudoMsg::WithdrawFundsToCommunityPool { address } => {
-            sudo_withdraw_funds_to_community_pool(deps, env, address)
+            sudo_withdraw_funds_to_address(deps, env, address)
         }
     }
 }
@@ -125,15 +125,46 @@ fn sudo_set_max_daily_burn(deps: DepsMut, amount: u128) -> Result<Response, Cont
         .add_attribute("daily_burn_amount", updated_config.daily_burn_amount))
 }
 
-// todo
-fn sudo_withdraw_funds_to_community_pool(
+fn sudo_withdraw_funds_to_address(
     deps: DepsMut,
     env: Env,
     address: String,
 ) -> Result<Response, ContractError> {
+    let config = INIT_CONFIG.load(deps.storage)?;
+
+    // we validate the address
+    let address = deps.api.addr_validate(&address)?;
+
+    // find the coin with non-zero balance that matches the denom
+    let contract_balances = deps.querier.query_all_balances(&env.contract.address)?;
+    let coin = contract_balances
+        .iter()
+        .find(|coin| coin.denom == config.native_denom && !coin.amount.is_zero());
+
+    let coin = match coin {
+        Some(coin) => coin.clone(),
+        None => {
+            return Err(ContractError::InsufficientContractBalance {});
+        }
+    };
+
+    // we can now proceed to transfering the contract balance to the provided address
+    // create a burn message
+    let amount = [coin].to_vec();
+    let send_msg = BankMsg::Send {
+        amount,
+        to_address: address.into_string(),
+    };
+
+    // Then we add the message to the response
+    let msgs: Vec<CosmosMsg> = vec![send_msg.into()];
+
     // Build response
-    // deps.api.addr_validate(&address)?,
-    let res = Response::new().add_attribute("method", "sudo_withdraw_funds_to_community_pool");
+    let res = Response::new()
+        .add_attribute("method", "sudo_withdraw_funds_to_address")
+        .add_messages(msgs);
+
+    // return response
     Ok(res)
 }
 
