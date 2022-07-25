@@ -5,10 +5,22 @@
     {
       "type": "object",
       "required": [
-        "query_balance"
+        "config"
       ],
       "properties": {
-        "query_balance": {
+        "config": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "balance"
+      ],
+      "properties": {
+        "balance": {
           "type": "object"
         }
       },

@@ -1,36 +1,63 @@
 # Details
 
-This contract allows the admin to burn contract balance as well as transfer ownership to another admin.
+This contract allows for the creation of a liquidity pool, with the following properties.
 
-## Messages
+1. Any client can attempt to burn `daily_burn_amount` of the contract's balance by calling the `BurnDailyQuota` execute method of the contract once every `burn_delay_seconds`.
+
+2. `sudo` method `SetMaxDailyBurn`  which can only be called by raising an onchain proposal targeting this contract.
+
+2. `sudo` method `WithdrawFundsToCommunityPool`  which can only be called by raising an onchain proposal targeting this contract.
+
+&nbsp;
+
+### Messages
 
 ```rust
+pub struct InstantiateMsg {
+    pub native_denom: String,
+    pub daily_burn_amount: u128,
+    pub burn_delay_seconds: u64,
+}
+
 pub enum ExecuteMsg {
-    BurnContractBalance {},
-    TransferContractOwnership { new_owner: String },
+    BurnDailyQuota {},
+}
+
+pub enum SudoMsg {
+    SetMaxDailyBurn { amount: Uint128 },
+    WithdrawFundsToCommunityPool { 
+        address: String 
+    },
 }
 ```
+&nbsp;
 
 ### Queries
 
 ```rust
-enum QueryMsg {
-    QueryBalance {},
+pub enum QueryMsg {
+    Config {},
+    Balance {},
 }
 
-struct BalanceResponse {
-    pub balance: String,
+pub struct BalanceResponse {
+    pub amount: Coin,
 }
 ```
 
-## Running this contract
+&nbsp;
 
-You will need Rust 1.44.1+ with `wasm32-unknown-unknown` target installed.
+### To run unit tests located in the .cargo/config file
 
-You can run unit tests on this via:
+`$ RUST_BACKTRACE=1 cargo unit-test`
 
-`$ cargo unit-test`
+ &nbsp;
 
-Once you are happy with the content, you can compile it to wasm via:
+### To compile an optimized build with a docker image
 
-`$ cargo run-script optimize`
+`$ docker run --rm -v "$(pwd)":/code \
+  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
+  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+  cosmwasm/rust-optimizer:0.12.6`
+
+  &nbsp;
