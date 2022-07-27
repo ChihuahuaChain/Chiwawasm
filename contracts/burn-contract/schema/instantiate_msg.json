@@ -2,12 +2,24 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "InstantiateMsg",
   "type": "object",
+  "required": [
+    "burn_delay_seconds",
+    "daily_burn_amount",
+    "native_denom"
+  ],
   "properties": {
-    "owner": {
-      "type": [
-        "string",
-        "null"
-      ]
+    "burn_delay_seconds": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "daily_burn_amount": {
+      "type": "integer",
+      "format": "uint128",
+      "minimum": 0.0
+    },
+    "native_denom": {
+      "type": "string"
     }
   }
 }

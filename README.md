@@ -4,7 +4,7 @@
 
 &nbsp;
 
-This repo is a collection of simple contracts built with the
+This repo is a collection of smart contracts built with the
 [cosmwasm](https://github.com/CosmWasm/cosmwasm) framework.
 
 This repo's organization is relatively simple. The top-level directory is just a placeholder
@@ -15,17 +15,19 @@ This allows us to compile all contracts with one command.
 
 The following contracts are available for use. For each of the contracts in `contracts`, you can view the source code under `src`
 
-* [Burn Contract](https://github.com/ChihuahuaChain/CosmWasm/tree/main/contracts/burn-contract) - A basic contract to burn token balances
+* [Burn-Contract](https://github.com/ChihuahuaChain/CosmWasm/tree/main/contracts/burn-contract) - A basic contract to burn token balances
 
-You can get more info from `README.md` file in each of the contacts.
+You can get more info from the `README.md` file in each of the contacts.
 
 &nbsp;
 
 ## Preparing for merge
 
-Before you merge the code, make sure it builds and passes all tests:
+Before you merge the code, make sure it builds and passes all tests using the command below.
 
 `./devtools/build_test_all.sh`
+
+&nbsp;
 
 ## Release builds
 
@@ -39,38 +41,33 @@ optimized build for each contract and saves them to the `./artifacts` directory:
 
 &nbsp;
 
-# Chihuahuad: Working with smart contracts
+## Chihuahuad: Working with smart contracts
 
-## Create test accounts
-
-`$ chihuahuad keys list`
+### Add test accounts
 
 `$ chihuahuad keys add <wallet_name> --recover`
 
-palingram: chihuahua1dpsvc7ml8mzkwtsdrcjfhgk6nmzsrhzj2auzkc
-[april surprise correct arm radar stay broom lava actual thank pistol diet anger month lucky rely loyal loud correct exclude initial height category issue]
+&nbsp;
 
-Wallet1: chihuahua15lhfr9vs7mzc6s4hmy9sgwpy4z8gvg9xjsuxpr
-[desert people fossil siege wild hurt frozen person reflect gift range lizard crunch cry filter cake differ number ancient swear fiber knee march tray]
+### List test accounts
 
-Wallet2: chihuahua1me3xey8rvgx3s4u83hctwzfea9wdsx4fxv9xsz
-[goat term before goose close donor reunion robot catalog goat soul ivory horn trigger quarter item inmate hand gun consider else bag sound heavy]
+`$ chihuahuad keys list`
 
 &nbsp;
 
-## View chihuahuad config variables
+### View chihuahuad config variables
 
 `$ open ~/.chihuahua/config/config.toml`
 
 &nbsp;
 
-## Block explorer
+### Block explorer
 
 <https://testnet.explorer.erialos.me/chihuahua>
 
 &nbsp;
 
-## Source config env for use in the shell (zsh)
+### Source config env for use in the shell (zsh)
 
 `$ source ~/.profile`
 
@@ -84,7 +81,7 @@ Wallet2: chihuahua1me3xey8rvgx3s4u83hctwzfea9wdsx4fxv9xsz
 
 &nbsp;
 
-## Query balances
+### Query balances
 
 `$ chihuahuad query bank total $NODE`
 
@@ -92,25 +89,19 @@ Wallet2: chihuahua1me3xey8rvgx3s4u83hctwzfea9wdsx4fxv9xsz
 
 &nbsp;
 
-## Send funds to other account
+### Send funds to other account
 
-`$ chihuahuad tx bank send [from_key_or_address] [to_address] [amount] [flags]`
-
-&nbsp;
-
-## To run unit tests located in the .cargo/config file
-
-`$ RUST_BACKTRACE=1 cargo unit-test`
+`$ chihuahuad tx bank send <sender_account_name> <receiver_address> <amount><denom> $TXFLAG`
 
 &nbsp;
 
-## See the list of code uploaded to the testnet
+### See the list of code uploaded to the testnet
 
 `$ chihuahuad query wasm list-code $NODE`
 
 &nbsp;
 
-## Generate a new cosm-wasm project from template
+### Generate a new cosm-wasm project from template
 
 `$ cargo install cargo-generate --features vendored-openssl`
 
@@ -118,34 +109,9 @@ Wallet2: chihuahua1me3xey8rvgx3s4u83hctwzfea9wdsx4fxv9xsz
 
 &nbsp;
 
-## Compile the wasm contract with stable toolchain
+### Store the contract on the blockchain and get the <CODE_ID>
 
-`$ rustup default stable`
-
-`$ cargo wasm`
-
-&nbsp;
-
-## To compile an optimized build with a docker image
-
-`$ docker run --rm -v "$(pwd)":/code \
-  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
-  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/rust-optimizer:0.12.6`
-
-### Alternatively
-
-`$ cargo install cargo-run-script`
-
-Add optimized script to the [package.metadata.scripts] section of the cargo.toml
-
-`$ cargo run-script optimize`
-
-&nbsp;
-
-## Store the contract on the blockchain
-
-`$ export RES=$(chihuahuad tx wasm store artifacts/<contract_name.wasm> --from palingram $TXFLAG -y --output json -b block)`
+`$ export RES=$(chihuahuad tx wasm store artifacts/<contract_name.wasm> --from <account_name> $TXFLAG -y --output json -b block)`
 
 `$ echo $RES`
 
@@ -155,7 +121,7 @@ Add optimized script to the [package.metadata.scripts] section of the cargo.toml
 
 &nbsp;
 
-### Get a list of contracts instantiated for $CODE_ID
+### Get a list of contracts instantiated for <CODE_ID>
 
 `$ chihuahuad query wasm list-contract-by-code $CODE_ID $NODE --output json`
 
@@ -169,7 +135,7 @@ Add optimized script to the [package.metadata.scripts] section of the cargo.toml
 
 ### Instantiate the contract
 
-`$ chihuahuad tx wasm instantiate $CODE_ID "$INIT" --from palingram --label "BURN TEST CONTRACT" $TXFLAG -y --no-admin`
+`$ chihuahuad tx wasm instantiate $CODE_ID "$INIT" --from <account_name> --label "BURN TEST CONTRACT" $TXFLAG -y --no-admin`
 
 &nbsp;
 
@@ -201,7 +167,7 @@ Add optimized script to the [package.metadata.scripts] section of the cargo.toml
 
 ### query the data for a storage key in the contract-state directly
 
-`$ chihuahuad query wasm contract-state raw $CONTRACT 636F6E74726163745F696E666F $NODE  --output "json" | jq -r '.data' | base64 -d`
+`$ chihuahuad query wasm contract-state raw $CONTRACT 636F6E666967 $NODE  --output "json" | jq -r '.data' | base64 -d`
 
 &nbsp;
 

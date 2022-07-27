@@ -9,6 +9,12 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("DailyBurnNotReady")]
+    DailyBurnNotReady {},
+
+    #[error("Contract balance is too small to execute")]
+    InsufficientContractBalance {},
+
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
     // Add any other custom errors you like here.
