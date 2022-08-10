@@ -79,6 +79,8 @@ optimized build for each contract and saves them to the `./artifacts` directory:
 
 `$ export TXFLAG=($NODE --chain-id $CHAIN_ID --gas-prices 0.25stake --gas auto --gas-adjustment 1.3)`
 
+`$ export TXFLAG_LOCAL=(--gas-prices 0.25stake --gas auto --gas-adjustment 1.3 --keyring-backend test)`
+
 &nbsp;
 
 ### Query balances
