@@ -73,7 +73,7 @@ optimized build for each contract and saves them to the `./artifacts` directory:
 
 `$ export CHAIN_ID="chitestnet-1"`
 
-`$ export RPC="tcp://65.108.126.34:26657"`
+`$ export RPC="<rpc_endpoint>"`
 
 `$ export NODE=(--node $RPC)`
 
