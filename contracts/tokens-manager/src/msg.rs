@@ -1,10 +1,15 @@
-use cosmwasm_std::{StdError, StdResult, Uint128};
+use cosmwasm_std::{Coin, StdError, StdResult, Uint128};
 use cw20::{Cw20Coin, Logo, MinterResponse};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::state::Entry;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct InstantiateMsg {}
+pub struct InstantiateMsg {
+    pub token_creation_fee: Coin,
+    pub token_code_id: u64,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -13,11 +18,11 @@ pub enum ExecuteMsg {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-pub struct TokenMarketingInfo {
-    pub project: Option<String>,
-    pub description: Option<String>,
-    pub marketing: Option<String>,
-    pub logo: Option<Logo>,
+pub struct MarketingInfo {
+    pub project: String,
+    pub description: String,
+    pub marketing: String,
+    pub logo: Logo,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
@@ -27,7 +32,7 @@ pub struct TokenInfo {
     pub decimals: u8,
     pub initial_balances: Vec<Cw20Coin>,
     pub mint: Option<MinterResponse>,
-    pub marketing: Option<TokenMarketingInfo>,
+    pub marketing: MarketingInfo,
 }
 
 impl TokenInfo {
@@ -79,5 +84,13 @@ fn is_valid_symbol(symbol: &str) -> bool {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
-    // todo add query messages here
+    QueryTokenList {
+        start_after: Option<u64>,
+        limit: Option<u32>,
+    },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct TokenListResponse {
+    pub entries: Vec<Entry>,
 }

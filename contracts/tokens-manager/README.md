@@ -1,1 +1,1 @@
-# todo: add contract description here
+# Details
