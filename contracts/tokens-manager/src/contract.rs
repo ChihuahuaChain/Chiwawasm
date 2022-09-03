@@ -22,28 +22,25 @@ const INSTANTIATE_REPLY_ID: u64 = 1u64;
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     //Store the contract name and version
     cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let config = Config {
-        owner: info.sender.clone(),
         token_creation_fee: msg.token_creation_fee,
         token_code_id: msg.token_code_id,
     };
 
-    // save the owner to the INIT_CONFIG state
+    // save INIT_CONFIG state
     INIT_CONFIG.save(deps.storage, &config)?;
 
     // save the entry sequence to storage starting from 0
     ENTRY_SEQ.save(deps.storage, &0u64)?;
 
     // return response
-    Ok(Response::new()
-        .add_attribute("method", "instantiate")
-        .add_attribute("owner", info.sender))
+    Ok(Response::new().add_attribute("method", "instantiate"))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -70,20 +67,24 @@ fn execute_create_new_token(
     // Check if the token_info is valid
     token_info.validate()?;
 
-    // Check if this token does not already exist
-    let empty = entries().may_load(
-        deps.storage,
-        (
-            &token_info.name.to_lowercase(),
-            &token_info.symbol.to_lowercase(),
-        ),
-    )?;
-    if let Some(_) = empty {
-        return Err(ContractError::TokenAlreadyExists {
-            name: token_info.name,
+    // Check if a token with the same symbol already exists
+    let entry = entries().may_load(deps.storage, &token_info.symbol.to_lowercase())?;
+    if let Some(_) = entry {
+        return Err(ContractError::TokenWithSymbolAlreadyExists {
             symbol: token_info.symbol,
         });
     }
+
+    // Check the sub_index if token with the same name already exists
+    /*let entry = entries()
+        .idx
+        .name
+        .item(deps.storage, token_info.name.to_lowercase())?;
+    if let Some(_) = entry {
+        return Err(ContractError::TokenWithNameAlreadyExists {
+            name: token_info.name,
+        });
+    }*/
 
     // Check if the amount sent by the caller is equal to the token_creation_fee
     let coin = info.funds.iter().find(|coin| {
@@ -140,7 +141,7 @@ fn execute_create_new_token(
  * Handle reply for execute_create_new_token
  * Load the TEMP_ENTRY_STATE and use the data to create a new Entry that includes
  * the newly created contract_address and latest ENTRY_SEQ id,
- * 
+ *
  * Save it to the store under (name, symbol): Entry of fn entries();
  * @return the token_contract_addr as an attribute on success
  */
@@ -175,11 +176,7 @@ fn handle_instantiate_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
         symbol: temp_entry.symbol,
         logo: temp_entry.logo,
     };
-    entries().save(
-        deps.storage,
-        (entry.name.as_str(), entry.symbol.as_str()),
-        &entry,
-    )?;
+    entries().save(deps.storage, entry.symbol.as_str(), &entry)?;
 
     Ok(Response::new().add_attribute("token_contract_addr", data.contract_address))
 }
@@ -212,7 +209,7 @@ fn query_tokens_list(
     // get the entries that matches the range
     let entries: StdResult<Vec<_>> = entries()
         .idx
-        .key
+        .id
         .range(deps.storage, start, None, Order::Ascending)
         .take(limit)
         .collect();
@@ -223,6 +220,8 @@ fn query_tokens_list(
 
     Ok(results)
 }
+
+// ? nice to have: query token by name or symbol
 
 fn query_config(deps: Deps) -> StdResult<Config> {
     let config = INIT_CONFIG.load(deps.storage)?;

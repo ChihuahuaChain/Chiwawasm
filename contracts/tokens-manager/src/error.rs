@@ -12,8 +12,11 @@ pub enum ContractError {
     #[error("Incorrect amount sent as token_creation_fee")]
     IncorrectTokenCreationFee {},
 
-    #[error("Token with name: {name:?} and symbol: {symbol:?} already exists")]
-    TokenAlreadyExists { name: String, symbol: String },
+    #[error("Token with symbol: {symbol:?} already exists")]
+    TokenWithSymbolAlreadyExists { symbol: String },
+
+    #[error("Token with name: {name:?} already exists")]
+    TokenWithNameAlreadyExists { name: String },
 
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
