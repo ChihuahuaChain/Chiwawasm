@@ -1,17 +1,22 @@
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, TokenInfo, TokenListResponse};
-use crate::state::{entries, Config, DEFAULT_LIMIT, INIT_CONFIG, MAX_LIMIT};
+use crate::state::{
+    entries, Config, Entry, TempEntry, DEFAULT_LIMIT, ENTRY_SEQ, INIT_CONFIG, MAX_LIMIT,
+    TEMP_ENTRY_STATE,
+};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Order, Response,
-    StdResult,
+    to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Order, Reply, ReplyOn,
+    Response, StdError, StdResult, Storage, SubMsg, WasmMsg,
 };
 use cw_storage_plus::Bound;
+use cw_utils::parse_reply_instantiate_data;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:my-first-contract";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const INSTANTIATE_REPLY_ID: u64 = 1u64;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -26,10 +31,14 @@ pub fn instantiate(
     let config = Config {
         owner: info.sender.clone(),
         token_creation_fee: msg.token_creation_fee,
+        token_code_id: msg.token_code_id,
     };
 
     // save the owner to the INIT_CONFIG state
     INIT_CONFIG.save(deps.storage, &config)?;
+
+    // save the entry sequence to storage starting from 0
+    ENTRY_SEQ.save(deps.storage, &0u64)?;
 
     // return response
     Ok(Response::new()
@@ -62,8 +71,14 @@ fn execute_create_new_token(
     token_info.validate()?;
 
     // Check if this token does not already exist
-    let empty = entries().may_load(deps.storage, (&token_info.name, &token_info.symbol))?;
-    if let Some(d) = empty {
+    let empty = entries().may_load(
+        deps.storage,
+        (
+            &token_info.name.to_lowercase(),
+            &token_info.symbol.to_lowercase(),
+        ),
+    )?;
+    if let Some(_) = empty {
         return Err(ContractError::TokenAlreadyExists {
             name: token_info.name,
             symbol: token_info.symbol,
@@ -83,23 +98,97 @@ fn execute_create_new_token(
         }
     };
 
+    // Save the TempEntry to state
+    let entry = TempEntry {
+        name: token_info.name.to_lowercase(),
+        symbol: token_info.symbol.to_lowercase(),
+        logo: token_info.marketing.logo.clone(),
+    };
+    TEMP_ENTRY_STATE.save(deps.storage, &entry)?;
+
     // Add message to burn the token_creation_fee
     let amount = vec![fee];
     let burn_msg = BankMsg::Burn { amount };
     let msgs: Vec<CosmosMsg> = vec![burn_msg.into()];
 
-    // todo add logic that calls the third party contract to create new token
+    // Add wasm msg to create new cw20 token instance from config.token_code_id
+    let instantiate_message = WasmMsg::Instantiate {
+        admin: Some(info.sender.to_string()),
+        code_id: config.token_code_id,
+        msg: to_binary(&token_info)?,
+        funds: vec![],
+        label: token_info.name.to_string(),
+    };
+    let sub_msg = SubMsg {
+        gas_limit: None,
+        id: INSTANTIATE_REPLY_ID,
+        reply_on: ReplyOn::Success,
+        msg: instantiate_message.into(),
+    };
 
     // Build response
     let res = Response::new()
         .add_attribute("method", "execute_create_new_token")
-        .add_messages(msgs);
+        .add_messages(msgs)
+        .add_submessage(sub_msg);
 
     // return response
     Ok(res)
 }
 
-// todo add logic to handle reply from creating token and get the contract address
+/**
+ * Handle reply for execute_create_new_token
+ * Load the TEMP_ENTRY_STATE and use the data to create a new Entry that includes
+ * the newly created contract_address and latest ENTRY_SEQ id,
+ * 
+ * Save it to the store under (name, symbol): Entry of fn entries();
+ * @return the token_contract_addr as an attribute on success
+ */
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> StdResult<Response> {
+    match msg.id {
+        INSTANTIATE_REPLY_ID => handle_instantiate_reply(deps, msg),
+        id => Err(StdError::generic_err(format!("Unknown reply id: {}", id))),
+    }
+}
+
+fn handle_instantiate_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
+    // Get data from reply msg
+    // See: https://github.com/CosmWasm/cw-plus/blob/main/packages/utils/src/parse_reply.rs
+    let res = parse_reply_instantiate_data(msg);
+    let data = match res {
+        Ok(d) => d,
+        Err(_) => {
+            return Err(StdError::generic_err("Error parsing data"));
+        }
+    };
+
+    // Get temp_entry and next id
+    let temp_entry = TEMP_ENTRY_STATE.load(deps.storage)?;
+    let id = next_entry_seq(deps.storage)?;
+
+    // Save the actual Entry
+    let entry = Entry {
+        id,
+        contract_addr: deps.api.addr_validate(&data.contract_address)?,
+        name: temp_entry.name,
+        symbol: temp_entry.symbol,
+        logo: temp_entry.logo,
+    };
+    entries().save(
+        deps.storage,
+        (entry.name.as_str(), entry.symbol.as_str()),
+        &entry,
+    )?;
+
+    Ok(Response::new().add_attribute("token_contract_addr", data.contract_address))
+}
+
+pub fn next_entry_seq(store: &mut dyn Storage) -> StdResult<u64> {
+    let id: u64 = ENTRY_SEQ.may_load(store)?.unwrap_or_default() + 1;
+    ENTRY_SEQ.save(store, &id)?;
+    Ok(id)
+}
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _: Env, msg: QueryMsg) -> StdResult<Binary> {
