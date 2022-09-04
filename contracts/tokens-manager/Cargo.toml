@@ -44,7 +44,7 @@ cosmwasm-std = "1.0.0"
 cosmwasm-storage = "1.0.0"
 cw-storage-plus = "0.14.0"
 cw2 = "0.13.2"
-cw20 = { version = "0.14.0" }
+cw20 = "0.14.0"
 cw-utils = {version = "0.14.0"}
 protobuf = { version = "2", features = ["with-bytes"] }
 schemars = "0.8.8"
@@ -55,3 +55,4 @@ thiserror = { version = "1.0.31" }
 cosmwasm-schema = "1.0.0"
 cw-multi-test = "0.13.2"
 anyhow = { version = "1.0.51"}
+cw20-base = { version = "0.14.0", features = ["library"] }

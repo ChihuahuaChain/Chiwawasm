@@ -31,13 +31,13 @@ pub struct Entry {
 // Learn more about kvstore https://github.com/cosmos/iavl
 pub struct EntryIndexes<'a> {
     pub id: UniqueIndex<'a, u64, Entry>,
-    // pub name: UniqueIndex<'a, String, Entry>,
+    pub name: UniqueIndex<'a, String, Entry>,
 }
 
 // This implements the get_indexes trait that returns the list od indexes
 impl IndexList<Entry> for EntryIndexes<'_> {
     fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<Entry>> + '_> {
-        let v: Vec<&dyn Index<Entry>> = vec![&self.id];
+        let v: Vec<&dyn Index<Entry>> = vec![&self.id, &self.name];
         Box::new(v.into_iter())
     }
 }
@@ -46,7 +46,7 @@ impl IndexList<Entry> for EntryIndexes<'_> {
 pub fn entries<'a>() -> IndexedMap<'a, &'a str, Entry, EntryIndexes<'a>> {
     let indexes = EntryIndexes {
         id: UniqueIndex::new(|e| e.id, "ENTRY_ID"),
-        // name: UniqueIndex::new(|e| e.name.clone(), "ENTRY_NAME"),
+        name: UniqueIndex::new(|e| e.name.clone(), "ENTRY_NAME"),
     };
 
     IndexedMap::new("ENTRY_LIST", indexes)

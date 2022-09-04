@@ -76,15 +76,16 @@ fn execute_create_new_token(
     }
 
     // Check the sub_index if token with the same name already exists
-    /*let entry = entries()
+    let entry = entries()
         .idx
         .name
         .item(deps.storage, token_info.name.to_lowercase())?;
+
     if let Some(_) = entry {
         return Err(ContractError::TokenWithNameAlreadyExists {
             name: token_info.name,
         });
-    }*/
+    }
 
     // Check if the amount sent by the caller is equal to the token_creation_fee
     let coin = info.funds.iter().find(|coin| {
@@ -108,23 +109,23 @@ fn execute_create_new_token(
     TEMP_ENTRY_STATE.save(deps.storage, &entry)?;
 
     // Add message to burn the token_creation_fee
-    let amount = vec![fee];
+    let amount = vec![fee.clone()];
     let burn_msg = BankMsg::Burn { amount };
     let msgs: Vec<CosmosMsg> = vec![burn_msg.into()];
 
     // Add wasm msg to create new cw20 token instance from config.token_code_id
-    let instantiate_message = WasmMsg::Instantiate {
-        admin: Some(info.sender.to_string()),
-        code_id: config.token_code_id,
-        msg: to_binary(&token_info)?,
-        funds: vec![],
-        label: token_info.name.to_string(),
-    };
     let sub_msg = SubMsg {
         gas_limit: None,
         id: INSTANTIATE_REPLY_ID,
         reply_on: ReplyOn::Success,
-        msg: instantiate_message.into(),
+        msg: WasmMsg::Instantiate {
+            admin: Some(info.sender.to_string()),
+            code_id: config.token_code_id,
+            msg: to_binary(&token_info)?,
+            funds: vec![],
+            label: token_info.name.to_string(),
+        }
+        .into(),
     };
 
     // Build response

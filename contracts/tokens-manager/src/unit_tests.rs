@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_new_token_with_new_symbol() {
+    fn test_create_new_token_name_exists() {
         let mut _instance = proper_initialization();
         let info = mock_info(
             &_instance.caller,
@@ -261,12 +261,18 @@ mod tests {
         };
         let _res = reply(_instance.deps.as_mut(), mock_env(), reply_msg).unwrap();
 
-        // when we try to create_new_token with different symbol but the same name, it works
+        // When we try to create_new_token with different symbol but the same name, we get an error
         let mut token_info = new_token_info();
         token_info.symbol = "DFS".to_string();
 
         let msg = ExecuteMsg::CreateToken { token_info };
-        let _res = execute(_instance.deps.as_mut(), _instance.env.clone(), info, msg).unwrap();
+        let _err = execute(_instance.deps.as_mut(), _instance.env.clone(), info, msg).unwrap_err();
+
+        // we expect the InsufficientContractBalance
+        match _err {
+            ContractError::TokenWithNameAlreadyExists { name: _ } => {}
+            e => panic!("unexpected error: {}", e),
+        }
     }
 
     #[test]
