@@ -3,7 +3,7 @@ mod tests {
     use crate::helpers::CwTemplateContract;
     use crate::msg::{ExecuteMsg, InstantiateMsg, MarketingInfo, TokenInfo};
 
-    use cosmwasm_std::{Addr, Coin, Empty, Uint128};
+    use cosmwasm_std::{coins, Addr, Coin, Empty, Uint128};
     use cw20::Logo;
     use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
 
@@ -28,13 +28,14 @@ mod tests {
     }
 
     fn contract_template() -> Box<dyn Contract<Empty>> {
-        let contract = ContractWrapper::new(
-            crate::contract::execute,
-            crate::contract::instantiate,
-            crate::contract::query,
-        );
-        let contract_with_reply = contract.with_reply(crate::contract::reply);
-        Box::new(contract_with_reply)
+        Box::new(
+            ContractWrapper::new(
+                crate::contract::execute,
+                crate::contract::instantiate,
+                crate::contract::query,
+            )
+            .with_reply(crate::contract::reply),
+        )
     }
 
     fn new_token_info() -> TokenInfo {
@@ -47,7 +48,7 @@ mod tests {
             marketing: MarketingInfo {
                 project: "Test Test Test".to_string(),
                 description: "Testing token".to_string(),
-                marketing: "Test! Test! Test!".to_string(),
+                marketing: "test".to_string(),
                 logo: Logo::Url("logo_url".to_string()),
             },
         }
@@ -60,11 +61,7 @@ mod tests {
                 .init_balance(
                     storage,
                     &Addr::unchecked(USER),
-                    // this amount denote the chain total supply
-                    vec![Coin {
-                        denom: NATIVE_DENOM.to_string(),
-                        amount: Uint128::from(SUPPLY),
-                    }],
+                    coins(SUPPLY, NATIVE_DENOM.to_string()),
                 )
                 .unwrap();
         })
@@ -107,11 +104,10 @@ mod tests {
 
     #[test]
     fn test_create_new_token_flow() {
-        /*let mut _instance = mock_instantiate();
+        let mut _instance = mock_instantiate();
 
         // here we call the create_new_token
         let token_info = new_token_info();
-
         let _res = _instance
             .app
             .execute_contract(
@@ -120,6 +116,8 @@ mod tests {
                 &ExecuteMsg::CreateToken { token_info },
                 &[_instance.msg.token_creation_fee],
             )
-            .unwrap();*/
+            .unwrap();
+
+        // todo handle eedge case for integration tests!
     }
 }

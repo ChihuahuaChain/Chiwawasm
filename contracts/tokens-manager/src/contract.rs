@@ -80,7 +80,6 @@ fn execute_create_new_token(
         .idx
         .name
         .item(deps.storage, token_info.name.to_lowercase())?;
-
     if let Some(_) = entry {
         return Err(ContractError::TokenWithNameAlreadyExists {
             name: token_info.name,
