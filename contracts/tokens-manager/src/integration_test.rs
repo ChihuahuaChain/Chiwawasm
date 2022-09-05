@@ -1,7 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::helpers::CwTemplateContract;
-    use crate::msg::{ExecuteMsg, InstantiateMsg, MarketingInfo, TokenInfo};
+    use crate::msg::{
+        ExecuteMsg, InstantiateMsg, MarketingInfo, QueryMsg, TokenInfo, TokenListResponse,
+    };
+    use crate::state::{Config, Entry};
 
     use cosmwasm_std::{coins, Addr, Coin, Empty, Uint128};
     use cw20::Logo;
@@ -67,6 +70,16 @@ mod tests {
         })
     }
 
+    fn get_token_list(app: &mut App, contract_address: Addr) -> TokenListResponse {
+        let msg = QueryMsg::QueryTokenList {
+            start_after: None,
+            limit: None,
+        };
+        let result: TokenListResponse =
+            app.wrap().query_wasm_smart(contract_address, &msg).unwrap();
+        result
+    }
+
     fn mock_instantiate() -> InstantiationResponse {
         let mut app = mock_app();
         let template_id = app.store_code(contract_template());
@@ -112,12 +125,25 @@ mod tests {
             .app
             .execute_contract(
                 Addr::unchecked(USER),
-                _instance.c_addr,
+                _instance.c_addr.clone(),
                 &ExecuteMsg::CreateToken { token_info },
                 &[_instance.msg.token_creation_fee],
             )
             .unwrap();
 
-        // todo handle eedge case for integration tests!
+        // verify that the new token is stored in the returned list
+        let list = get_token_list(&mut _instance.app, _instance.c_addr);
+        assert_eq!(
+            list,
+            TokenListResponse {
+                entries: vec![Entry {
+                    id: 1,
+                    name: "test token".to_string(),
+                    symbol: "ttt".to_string(),
+                    logo: Logo::Url("logo_url".to_string()),
+                    contract_addr: Addr::unchecked("contract1")
+                }]
+            }
+        );
     }
 }
