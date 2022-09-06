@@ -149,6 +149,8 @@ $ chihuahuad tx wasm execute $CONTRACT "$E_PAYLOAD" --from cryptoql --amount=100
 
 ### Query QueryTokenList
 
+```zsh
 export Q_PAYLOAD='{"query_token_list":{}}'
 
-chihuahuad query wasm contract-state smart $CONTRACT "$Q_PAYLOAD" $NODE --output json
+$ chihuahuad query wasm contract-state smart $CONTRACT "$Q_PAYLOAD" $NODE --output json
+```

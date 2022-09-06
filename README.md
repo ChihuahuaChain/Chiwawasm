@@ -17,6 +17,8 @@ The following contracts are available for use. For each of the contracts in `con
 
 * [Burn-Contract](https://github.com/ChihuahuaChain/CosmWasm/tree/main/contracts/burn-contract) - A basic contract to burn token balances
 
+* [Tokens-Manger](https://github.com/ChihuahuaChain/Chiwawasm/tree/main/contracts/tokens-manager) - The cw20 tokens manager allow users to pay a `token_creation_fee` to mint cw20 tokens managed by this contract
+
 You can get more info from the `README.md` file in each of the contacts.
 
 &nbsp;
