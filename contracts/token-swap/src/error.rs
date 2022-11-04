@@ -63,8 +63,14 @@ pub enum ContractError {
     #[error("Failed to instantiate lp token")]
     InstantiateLpTokenError {},
 
-    #[error("Burn Rate is missing")]
-    BurnRateIsMissing {},
+    #[error("No native token provided in pair")]
+    NativeTokenNotProvidedInPair {},
+
+    #[error("Swap rate should be between 0.1% and 1.0%")]
+    InvalidSwapRate {},
+
+    #[error("Denoms for token pair cannot be the same")]
+    IdenticalDenomNotAllowedInPair {},
 
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },

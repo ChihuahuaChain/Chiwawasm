@@ -1,22 +1,24 @@
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Addr, Decimal, Uint128};
 use cw20::{Denom, Expiration};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+// Note: This contract only handles pairing HUAHUA to cw20
+// we can add support for IBC tokens as well
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    pub token1_denom: Denom,
-    pub token2_denom: Denom,
+    // {"native":"udenom"}
+    pub native_denom: Denom,
+    pub base_denom: Denom,
+    pub quote_denom: Denom,
     pub lp_token_code_id: u64,
-
-    // Q?
-    pub burn_rate: Option<u64>,
+    pub swap_rate: Decimal,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum TokenSelect {
-    Token1,
-    Token2,
+    Base,
+    Quote,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -66,7 +68,7 @@ pub enum ExecuteMsg {
         output_min_token: Uint128,
         expiration: Option<Expiration>,
     },
-    
+
     SwapAndSendTo {
         input_token: TokenSelect,
         input_amount: Uint128,
@@ -80,40 +82,19 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     /// Implements CW20. Returns the current balance of the given address, 0 if unset.
-    Balance {
-        address: String,
-    },
+    Balance { address: String },
 
-    ///
+    /// Returns information about the current state of the pool
     Info {},
-
-    ///
-    Token1ForToken2Price {
-        token1_amount: Uint128,
-    },
-
-    ///
-    Token2ForToken1Price {
-        token2_amount: Uint128,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InfoResponse {
-    pub token1_reserve: Uint128,
-    pub token1_denom: Denom,
-    pub token2_reserve: Uint128,
-    pub token2_denom: Denom,
+    pub base_reserve: Uint128,
+    pub base_denom: Denom,
+    pub quote_reserve: Uint128,
+    pub quote_denom: Denom,
+    pub swap_rate: Decimal,
     pub lp_token_supply: Uint128,
-    pub lp_token_address: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct Token1ForToken2PriceResponse {
-    pub token2_amount: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct Token2ForToken1PriceResponse {
-    pub token1_amount: Uint128,
+    pub lp_token_address: Addr,
 }
