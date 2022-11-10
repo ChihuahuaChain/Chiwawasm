@@ -15,16 +15,10 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
-    #[error("Min liquidity error: requested: {min_liquidity}, available: {liquidity_available}")]
-    MinLiquidityError {
-        min_liquidity: Uint128,
-        liquidity_available: Uint128,
-    },
-
-    #[error("Max token error: max_token: {max_token}, tokens_required: {tokens_required}")]
-    MaxTokenError {
-        max_token: Uint128,
-        tokens_required: Uint128,
+    #[error("Max quote token error: max_token: {max_quote_token_amount}, tokens_required: {required_quote_token_amount}")]
+    MaxQuoteTokenAmountExceeded {
+        max_quote_token_amount: Uint128,
+        required_quote_token_amount: Uint128,
     },
 
     #[error("Insufficient liquidity error: requested: {requested}, available: {available}")]
@@ -45,9 +39,6 @@ pub enum ContractError {
         available: Uint128,
     },
 
-    #[error("Incorrect native denom: provided: {provided}, required: {required}")]
-    IncorrectNativeDenom { provided: String, required: String },
-
     #[error("Swap min error: min: {min}, available: {available}")]
     SwapMinError { min: Uint128, available: Uint128 },
 
@@ -56,6 +47,9 @@ pub enum ContractError {
 
     #[error("InsufficientFunds")]
     InsufficientFunds {},
+
+    #[error("Non zero amount for base and quote tokens is expected")]
+    NonZeroInputAmountExpected {},
 
     #[error("Uknown reply id: {id}")]
     UnknownReplyId { id: u64 },
@@ -66,11 +60,14 @@ pub enum ContractError {
     #[error("No native token provided in pair")]
     NativeTokenNotProvidedInPair {},
 
+    #[error("Base denom is not a native token")]
+    InvalidBaseDenom {},
+
+    #[error("Quote denom is not a cw20 token")]
+    InvalidQuoteDenom {},
+
     #[error("Swap rate should be between 0.1% and 1.0%")]
     InvalidSwapRate {},
-
-    #[error("Denoms for token pair cannot be the same")]
-    IdenticalDenomNotAllowedInPair {},
 
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },

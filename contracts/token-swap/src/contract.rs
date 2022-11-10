@@ -1,11 +1,12 @@
+use std::ops::Add;
 use std::str::FromStr;
 
 use cosmwasm_std::{
-    entry_point, to_binary, Addr, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Reply, ReplyOn,
-    Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
+    attr, entry_point, to_binary, Addr, Binary, BlockInfo, Coin, CosmosMsg, Decimal, Deps, DepsMut,
+    Env, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
 };
 use cw0::parse_reply_instantiate_data;
-use cw20::{Expiration, MinterResponse};
+use cw20::{Cw20ExecuteMsg, Denom, Expiration, MinterResponse};
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InfoResponse, InstantiateMsg, QueryMsg, TokenSelect};
@@ -26,9 +27,12 @@ pub fn instantiate(
     // Store the contract name and version
     cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    // check to make sure base_denom != quote_denom
-    if msg.base_denom.clone().eq(&msg.quote_denom.clone()) {
-        return Err(ContractError::IdenticalDenomNotAllowedInPair {});
+    // Check that base denom is of Native token type
+    match msg.base_denom {
+        Denom::Native(_) => {}
+        _ => {
+            return Err(ContractError::InvalidBaseDenom {});
+        }
     }
 
     // Make sure the base_denom == native_denom
@@ -36,7 +40,15 @@ pub fn instantiate(
         return Err(ContractError::NativeTokenNotProvidedInPair {});
     }
 
-    // check that the swap_rate is between 0.1% and 1.0%
+    // Verify that quote denom is of cw20 token type
+    match msg.quote_denom {
+        Denom::Cw20(_) => {}
+        _ => {
+            return Err(ContractError::InvalidQuoteDenom {});
+        }
+    }
+
+    // Verify that the swap_rate is between 0.1% and 1.0%
     if msg.swap_rate.clone() < Decimal::from_str("0.1").unwrap()
         || msg.swap_rate.clone() > Decimal::one()
     {
@@ -144,17 +156,15 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::AddLiquidity {
-            token1_amount,
-            min_liquidity,
-            max_token2,
+            base_token_amount,
+            max_quote_token_amount,
             expiration,
         } => execute_add_liquidity(
             deps,
             &info,
             env,
-            min_liquidity,
-            token1_amount,
-            max_token2,
+            base_token_amount,
+            max_quote_token_amount,
             expiration,
         ),
         ExecuteMsg::RemoveLiquidity {
@@ -199,7 +209,7 @@ pub fn execute(
             input_token,
             input_amount,
             recipient,
-            min_token,
+            min_output,
             expiration,
         } => execute_swap(
             deps,
@@ -208,23 +218,212 @@ pub fn execute(
             env,
             input_token,
             &recipient,
-            min_token,
+            min_output,
             expiration,
         ),
     }
 }
 
-// todo
+fn check_expiration(
+    expiration: &Option<Expiration>,
+    block: &BlockInfo,
+) -> Result<(), ContractError> {
+    if let Some(e) = expiration {
+        if e.is_expired(block) {
+            return Err(ContractError::MsgExpirationError {});
+        }
+    }
+
+    Ok(())
+}
+
+fn get_amount_for_denom(coins: &[Coin], denom: &str) -> Coin {
+    let amount: Uint128 = coins
+        .iter()
+        .filter(|c| c.denom == denom)
+        .map(|c| c.amount)
+        .sum();
+
+    Coin {
+        amount,
+        denom: denom.to_string(),
+    }
+}
+
+fn validate_base_amount(
+    coins: &[Coin],
+    given_amount: Uint128,
+    given_denom: &Denom,
+) -> Result<(), ContractError> {
+    if let Denom::Native(denom) = given_denom {
+        let actual = get_amount_for_denom(coins, denom);
+
+        if actual.amount != given_amount {
+            return Err(ContractError::InsufficientFunds {});
+        }
+    }
+
+    Ok(())
+}
+
+fn get_lp_token_supply(deps: Deps, lp_token_addr: &Addr) -> StdResult<Uint128> {
+    let resp: cw20::TokenInfoResponse = deps
+        .querier
+        .query_wasm_smart(lp_token_addr, &cw20_base::msg::QueryMsg::TokenInfo {})?;
+    Ok(resp.total_supply)
+}
+
+pub fn get_lp_token_amount_to_mint(
+    base_token_amount: Uint128,
+    liquidity_supply: Uint128,
+    base_reserve: Uint128,
+) -> Result<Uint128, ContractError> {
+    if liquidity_supply == Uint128::zero() {
+        Ok(base_token_amount)
+    } else {
+        Ok(base_token_amount
+            .checked_mul(liquidity_supply)
+            .map_err(StdError::overflow)?
+            .checked_div(base_reserve)
+            .map_err(StdError::divide_by_zero)?)
+    }
+}
+
+pub fn get_required_quote_token_amount(
+    base_token_amount: Uint128,
+    liquidity_supply: Uint128,
+    quote_reserve: Uint128,
+    base_reserve: Uint128,
+) -> Result<Uint128, StdError> {
+    if liquidity_supply == Uint128::zero() {
+        Ok(base_token_amount)
+    } else {
+        Ok(base_token_amount
+            .checked_mul(quote_reserve)
+            .map_err(StdError::overflow)?
+            .checked_div(base_reserve)
+            .map_err(StdError::divide_by_zero)?)
+    }
+}
+
+fn get_cw20_transfer_from_msg(
+    owner: &Addr,
+    recipient: &Addr,
+    token_addr: &Addr,
+    token_amount: Uint128,
+) -> StdResult<CosmosMsg> {
+    // create transfer cw20 msg
+    let transfer_cw20_msg = Cw20ExecuteMsg::TransferFrom {
+        owner: owner.into(),
+        recipient: recipient.into(),
+        amount: token_amount,
+    };
+    let exec_cw20_transfer = WasmMsg::Execute {
+        contract_addr: token_addr.into(),
+        msg: to_binary(&transfer_cw20_msg)?,
+        funds: vec![],
+    };
+    let cw20_transfer_cosmos_msg: CosmosMsg = exec_cw20_transfer.into();
+    Ok(cw20_transfer_cosmos_msg)
+}
+
+fn mint_lp_tokens(
+    recipient: &Addr,
+    liquidity_amount: Uint128,
+    lp_token_address: &Addr,
+) -> StdResult<CosmosMsg> {
+    let mint_msg = cw20_base::msg::ExecuteMsg::Mint {
+        recipient: recipient.into(),
+        amount: liquidity_amount,
+    };
+    Ok(WasmMsg::Execute {
+        contract_addr: lp_token_address.to_string(),
+        msg: to_binary(&mint_msg)?,
+        funds: vec![],
+    }
+    .into())
+}
+
 pub fn execute_add_liquidity(
     deps: DepsMut,
     info: &MessageInfo,
     env: Env,
-    min_liquidity: Uint128,
-    token1_amount: Uint128,
-    max_token2: Uint128,
+    base_token_amount: Uint128,
+    max_quote_token_amount: Uint128,
     expiration: Option<Expiration>,
 ) -> Result<Response, ContractError> {
-    Ok(Response::new())
+    check_expiration(&expiration, &env.block)?;
+
+    // Check that non zero amounts are passed for both tokens
+    if base_token_amount.is_zero() || max_quote_token_amount.is_zero() {
+        return Err(ContractError::NonZeroInputAmountExpected {});
+    }
+
+    // load the token reserves
+    let base = BASE_TOKEN.load(deps.storage)?;
+    let quote = QUOTE_TOKEN.load(deps.storage)?;
+    let lp_token_addr = LP_TOKEN.load(deps.storage)?;
+
+    // Validate the input for the base_token_amount to know if the user
+    // sent the exact amount and denom in the contract call
+    validate_base_amount(&info.funds, base_token_amount, &base.denom)?;
+
+    // Calculate how much lp tokens to mint
+    let lp_token_supply = get_lp_token_supply(deps.as_ref(), &lp_token_addr)?;
+
+    let liquidity_amount =
+        get_lp_token_amount_to_mint(base_token_amount, lp_token_supply, base.reserve)?;
+
+    // Calculate the required_quote_token_amount
+    let required_quote_token_amount = get_required_quote_token_amount(
+        base_token_amount,
+        lp_token_supply,
+        quote.reserve,
+        base.reserve,
+    )?;
+
+    // Validate that max_quote_token_amount <= required_quote_token_amount
+    if required_quote_token_amount > max_quote_token_amount {
+        return Err(ContractError::MaxQuoteTokenAmountExceeded {
+            max_quote_token_amount,
+            required_quote_token_amount,
+        });
+    }
+
+    // Generate CW20 transfer message to transfer required_quote_token_amount
+    // from caller address to contract address
+    let mut transfer_msg = vec![];
+    if let Denom::Cw20(addr) = quote.denom.clone() {
+        transfer_msg.push(get_cw20_transfer_from_msg(
+            &info.sender,
+            &env.contract.address,
+            &addr,
+            required_quote_token_amount,
+        )?);
+    }
+
+    // Update token reserves
+    BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
+        base.reserve += base_token_amount;
+        Ok(base)
+    })?;
+    QUOTE_TOKEN.update(deps.storage, |mut quote| -> Result<_, ContractError> {
+        quote.reserve += required_quote_token_amount;
+        Ok(quote)
+    })?;
+
+    // Mint LP tokens
+    let mint_msg = mint_lp_tokens(&info.sender, liquidity_amount, &lp_token_addr)?;
+
+    // respond
+    Ok(Response::new()
+        .add_messages(transfer_msg)
+        .add_message(mint_msg)
+        .add_attributes(vec![
+            attr("base_token_amount", base_token_amount),
+            attr("required_quote_token_amount", required_quote_token_amount),
+            attr("liquidity_received", liquidity_amount),
+        ]))
 }
 
 // todo
@@ -292,11 +491,4 @@ pub fn query_info(deps: Deps) -> StdResult<InfoResponse> {
         lp_token_supply: get_lp_token_supply(deps, &lp_token_address)?,
         lp_token_address: lp_token_address,
     })
-}
-
-fn get_lp_token_supply(deps: Deps, lp_token_addr: &Addr) -> StdResult<Uint128> {
-    let resp: cw20::TokenInfoResponse = deps
-        .querier
-        .query_wasm_smart(lp_token_addr, &cw20_base::msg::QueryMsg::TokenInfo {})?;
-    Ok(resp.total_supply)
 }

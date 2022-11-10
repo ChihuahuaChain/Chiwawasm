@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 // we can add support for IBC tokens as well
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    // {"native":"udenom"}
+    // {"native":"udenom"} or {"cw20":"addr"}
     pub native_denom: Denom,
     pub base_denom: Denom,
     pub quote_denom: Denom,
@@ -24,17 +24,9 @@ pub enum TokenSelect {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    ///
     AddLiquidity {
-        token1_amount: Uint128,
-
-        // Q?
-        min_liquidity: Uint128,
-
-        // Q?
-        max_token2: Uint128,
-
-        // Q?
+        base_token_amount: Uint128,
+        max_quote_token_amount: Uint128,
         expiration: Option<Expiration>,
     },
 
@@ -48,14 +40,11 @@ pub enum ExecuteMsg {
         expiration: Option<Expiration>,
     },
 
-    ///
+    /// Todo read about how to write proper rust docs.
     Swap {
         input_token: TokenSelect,
         input_amount: Uint128,
-
-        // Q?
         min_output: Uint128,
-
         expiration: Option<Expiration>,
     },
 
@@ -72,9 +61,9 @@ pub enum ExecuteMsg {
     SwapAndSendTo {
         input_token: TokenSelect,
         input_amount: Uint128,
-        recipient: Addr,
-        min_token: Uint128,
+        min_output: Uint128,
         expiration: Option<Expiration>,
+        recipient: Addr,
     },
 }
 

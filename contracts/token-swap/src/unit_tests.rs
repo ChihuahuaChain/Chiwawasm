@@ -4,34 +4,32 @@ mod tests {
 
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockQuerier};
     use cosmwasm_std::{
-        to_binary, Addr, Attribute, Decimal, Empty, Env, MemoryStorage, OwnedDeps, Reply, ReplyOn,
-        SubMsg, SubMsgResponse, SubMsgResult, WasmMsg,
+        to_binary, Addr, Attribute, Decimal, Empty, MemoryStorage, OwnedDeps, Reply, ReplyOn,
+        SubMsg, SubMsgResponse, SubMsgResult, Uint128, WasmMsg,
     };
     use cw20::{Denom, MinterResponse};
 
-    use crate::contract::{instantiate, reply};
+    use crate::contract::{
+        get_lp_token_amount_to_mint, get_required_quote_token_amount, instantiate, reply,
+    };
     use crate::msg::InstantiateMsg;
     use crate::state::LP_TOKEN;
     use crate::ContractError;
 
     struct InstantiationResponse {
         deps: OwnedDeps<MemoryStorage, MockApi, MockQuerier<Empty>, Empty>,
-        caller: String,
-        env: Env,
-        msg: InstantiateMsg,
     }
 
-    // todo test instantiation error cases
     #[test]
-    fn init_error_identical_denom_not_allowed_in_pair() {
+    fn init_error_invalid_base_denom() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let caller = String::from("cosmos2contract");
 
         let msg = InstantiateMsg {
-            native_denom: Denom::Native(String::from("stake")),
-            base_denom: Denom::Native(String::from("stake")),
-            quote_denom: Denom::Native(String::from("stake")),
+            native_denom: Denom::Native(String::from("native")),
+            base_denom: Denom::Cw20(Addr::unchecked("quote_as_base")),
+            quote_denom: Denom::Cw20(Addr::unchecked("quote")),
             swap_rate: Decimal::from_str("0.3").unwrap(),
             lp_token_code_id: 1234u64,
         };
@@ -40,7 +38,7 @@ mod tests {
         let info = mock_info(&caller, &[]);
         let _err = instantiate(deps.as_mut(), env.clone(), info, msg.clone()).unwrap_err();
         match _err {
-            ContractError::IdenticalDenomNotAllowedInPair {} => {}
+            ContractError::InvalidBaseDenom {} => {}
             e => panic!("unexpected error: {}", e),
         }
     }
@@ -52,9 +50,9 @@ mod tests {
         let caller = String::from("cosmos2contract");
 
         let msg = InstantiateMsg {
-            native_denom: Denom::Native(String::from("stake")),
-            base_denom: Denom::Native(String::from("woof")),
-            quote_denom: Denom::Native(String::from("puppy")),
+            native_denom: Denom::Native(String::from("native")),
+            base_denom: Denom::Native(String::from("native_but_wrong_value")),
+            quote_denom: Denom::Cw20(Addr::unchecked("quote")),
             swap_rate: Decimal::from_str("0.3").unwrap(),
             lp_token_code_id: 1234u64,
         };
@@ -69,15 +67,38 @@ mod tests {
     }
 
     #[test]
+    fn init_error_invalid_quote_denom() {
+        let mut deps = mock_dependencies();
+        let env = mock_env();
+        let caller = String::from("cosmos2contract");
+
+        let msg = InstantiateMsg {
+            native_denom: Denom::Native(String::from("native")),
+            base_denom: Denom::Native(String::from("native")),
+            quote_denom: Denom::Native(String::from("native_as_quote")),
+            swap_rate: Decimal::from_str("0.3").unwrap(),
+            lp_token_code_id: 1234u64,
+        };
+
+        // Inspect response
+        let info = mock_info(&caller, &[]);
+        let _err = instantiate(deps.as_mut(), env.clone(), info, msg.clone()).unwrap_err();
+        match _err {
+            ContractError::InvalidQuoteDenom {} => {}
+            e => panic!("unexpected error: {}", e),
+        }
+    }
+
+    #[test]
     fn init_error_invalid_swap_rate_below_limit() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let caller = String::from("cosmos2contract");
 
         let msg = InstantiateMsg {
-            native_denom: Denom::Native(String::from("stake")),
-            base_denom: Denom::Native(String::from("stake")),
-            quote_denom: Denom::Native(String::from("puppy")),
+            native_denom: Denom::Native(String::from("native")),
+            base_denom: Denom::Native(String::from("native")),
+            quote_denom: Denom::Cw20(Addr::unchecked("quote")),
             swap_rate: Decimal::from_str("0.05").unwrap(),
             lp_token_code_id: 1234u64,
         };
@@ -98,9 +119,9 @@ mod tests {
         let caller = String::from("cosmos2contract");
 
         let msg = InstantiateMsg {
-            native_denom: Denom::Native(String::from("stake")),
-            base_denom: Denom::Native(String::from("stake")),
-            quote_denom: Denom::Native(String::from("puppy")),
+            native_denom: Denom::Native(String::from("native")),
+            base_denom: Denom::Native(String::from("native")),
+            quote_denom: Denom::Cw20(Addr::unchecked("quote")),
             swap_rate: Decimal::from_str("1.2").unwrap(),
             lp_token_code_id: 1234u64,
         };
@@ -121,9 +142,9 @@ mod tests {
         let caller = String::from("cosmos2contract");
 
         let msg = InstantiateMsg {
-            native_denom: Denom::Native(String::from("stake")),
-            base_denom: Denom::Native(String::from("stake")),
-            quote_denom: Denom::Cw20(Addr::unchecked("token_address")),
+            native_denom: Denom::Native(String::from("native")),
+            base_denom: Denom::Native(String::from("native")),
+            quote_denom: Denom::Cw20(Addr::unchecked("quote")),
             swap_rate: Decimal::from_str("0.3").unwrap(),
             lp_token_code_id: 1234u64,
         };
@@ -157,12 +178,7 @@ mod tests {
         );
 
         // return reusable data
-        InstantiationResponse {
-            deps,
-            caller,
-            env,
-            msg,
-        }
+        InstantiationResponse { deps }
     }
 
     fn lp_token_info(minter: String) -> cw20_base::msg::InstantiateMsg {
@@ -204,5 +220,42 @@ mod tests {
         // query the contract state to see if the lp contract address was saved
         let lp_token_address = LP_TOKEN.load(&_instance.deps.storage).unwrap();
         assert_eq!(lp_token_address, Addr::unchecked(contract_addr));
+    }
+
+    // we cannot test the execute methods using the standard execute method calls
+    // because we are calling into another contract
+    // in that case, we just test the standard functions used in the contract
+    #[test]
+    fn test_get_lp_token_amount_to_mint() {
+        let liquidity =
+            get_lp_token_amount_to_mint(Uint128::new(100), Uint128::zero(), Uint128::zero())
+                .unwrap();
+        assert_eq!(liquidity, Uint128::new(100));
+
+        let liquidity =
+            get_lp_token_amount_to_mint(Uint128::new(100), Uint128::new(50), Uint128::new(25))
+                .unwrap();
+        assert_eq!(liquidity, Uint128::new(200));
+    }
+
+    #[test]
+    fn test_get_required_quote_token_amount() {
+        let liquidity = get_required_quote_token_amount(
+            Uint128::new(100),
+            Uint128::zero(),
+            Uint128::zero(),
+            Uint128::zero(),
+        )
+        .unwrap();
+        assert_eq!(liquidity, Uint128::new(100));
+
+        let liquidity = get_required_quote_token_amount(
+            Uint128::new(200),
+            Uint128::new(100),
+            Uint128::new(100),
+            Uint128::new(100),
+        )
+        .unwrap();
+        assert_eq!(liquidity, Uint128::new(200));
     }
 }
