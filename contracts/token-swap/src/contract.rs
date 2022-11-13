@@ -1,9 +1,9 @@
-use std::ops::Add;
 use std::str::FromStr;
 
 use cosmwasm_std::{
-    attr, entry_point, to_binary, Addr, Binary, BlockInfo, Coin, CosmosMsg, Decimal, Deps, DepsMut,
-    Env, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
+    attr, entry_point, to_binary, Addr, BankMsg, Binary, BlockInfo, Coin, CosmosMsg, Decimal, Deps,
+    DepsMut, Env, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128,
+    WasmMsg,
 };
 use cw0::parse_reply_instantiate_data;
 use cw20::{Cw20ExecuteMsg, Denom, Expiration, MinterResponse};
@@ -169,10 +169,18 @@ pub fn execute(
         ),
         ExecuteMsg::RemoveLiquidity {
             amount,
-            min_token1,
-            min_token2,
+            min_base_token_output,
+            min_quote_token_output,
             expiration,
-        } => execute_remove_liquidity(deps, info, env, amount, min_token1, min_token2, expiration),
+        } => execute_remove_liquidity(
+            deps,
+            info,
+            env,
+            amount,
+            min_base_token_output,
+            min_quote_token_output,
+            expiration,
+        ),
         ExecuteMsg::Swap {
             input_token,
             input_amount,
@@ -273,6 +281,16 @@ fn get_lp_token_supply(deps: Deps, lp_token_addr: &Addr) -> StdResult<Uint128> {
     Ok(resp.total_supply)
 }
 
+fn get_token_balance(deps: Deps, contract: &Addr, addr: &Addr) -> StdResult<Uint128> {
+    let resp: cw20::BalanceResponse = deps.querier.query_wasm_smart(
+        contract,
+        &cw20_base::msg::QueryMsg::Balance {
+            address: addr.to_string(),
+        },
+    )?;
+    Ok(resp.balance)
+}
+
 pub fn get_lp_token_amount_to_mint(
     base_token_amount: Uint128,
     liquidity_supply: Uint128,
@@ -344,6 +362,48 @@ fn mint_lp_tokens(
     .into())
 }
 
+fn get_bank_transfer_to_msg(recipient: &Addr, denom: &str, native_amount: Uint128) -> CosmosMsg {
+    let transfer_bank_msg = BankMsg::Send {
+        to_address: recipient.into(),
+        amount: vec![Coin {
+            denom: denom.to_string(),
+            amount: native_amount,
+        }],
+    };
+
+    let transfer_bank_cosmos_msg: CosmosMsg = transfer_bank_msg.into();
+    transfer_bank_cosmos_msg
+}
+
+fn get_cw20_transfer_to_msg(
+    recipient: &Addr,
+    token_addr: &Addr,
+    token_amount: Uint128,
+) -> StdResult<CosmosMsg> {
+    Ok(WasmMsg::Execute {
+        contract_addr: token_addr.into(),
+        msg: to_binary(&Cw20ExecuteMsg::Transfer {
+            recipient: recipient.into(),
+            amount: token_amount,
+        })?,
+        funds: vec![],
+    }
+    .into())
+}
+
+fn get_burn_msg(contract: &Addr, owner: &Addr, amount: Uint128) -> StdResult<CosmosMsg> {
+    let msg = cw20_base::msg::ExecuteMsg::BurnFrom {
+        owner: owner.to_string(),
+        amount,
+    };
+    Ok(WasmMsg::Execute {
+        contract_addr: contract.to_string(),
+        msg: to_binary(&msg)?,
+        funds: vec![],
+    }
+    .into())
+}
+
 pub fn execute_add_liquidity(
     deps: DepsMut,
     info: &MessageInfo,
@@ -370,7 +430,6 @@ pub fn execute_add_liquidity(
 
     // Calculate how much lp tokens to mint
     let lp_token_supply = get_lp_token_supply(deps.as_ref(), &lp_token_addr)?;
-
     let liquidity_amount =
         get_lp_token_amount_to_mint(base_token_amount, lp_token_supply, base.reserve)?;
 
@@ -426,17 +485,104 @@ pub fn execute_add_liquidity(
         ]))
 }
 
-// todo
 pub fn execute_remove_liquidity(
     deps: DepsMut,
     info: MessageInfo,
     env: Env,
-    amount: Uint128,
-    min_token1: Uint128,
-    min_token2: Uint128,
+    lp_amount: Uint128,
+    min_base_token_output: Uint128,
+    min_quote_token_output: Uint128,
     expiration: Option<Expiration>,
 ) -> Result<Response, ContractError> {
-    Ok(Response::new())
+    check_expiration(&expiration, &env.block)?;
+
+    // load the token reserves
+    let base = BASE_TOKEN.load(deps.storage)?;
+    let quote = QUOTE_TOKEN.load(deps.storage)?;
+    let lp_token_addr = LP_TOKEN.load(deps.storage)?;
+    let lp_token_supply = get_lp_token_supply(deps.as_ref(), &lp_token_addr)?;
+    let user_lp_balance = get_token_balance(deps.as_ref(), &lp_token_addr, &info.sender)?;
+
+    // Check if lp amount to withdraw is valid
+    if lp_amount > user_lp_balance {
+        return Err(ContractError::InsufficientLiquidityError {
+            requested: lp_amount,
+            available: user_lp_balance,
+        });
+    }
+
+    // Calculate the base token amount to withdraw from the pool
+    let base_amount_to_output = lp_amount
+        .checked_mul(base.reserve)
+        .map_err(StdError::overflow)?
+        .checked_div(lp_token_supply)
+        .map_err(StdError::divide_by_zero)?;
+    if base_amount_to_output < min_base_token_output {
+        return Err(ContractError::MinBaseTokenOutputError {
+            requested: min_base_token_output,
+            available: base_amount_to_output,
+        });
+    }
+
+    // Calculate the quote token amount to withdraw from the pool
+    let quote_amount_to_output = lp_amount
+        .checked_mul(quote.reserve)
+        .map_err(StdError::overflow)?
+        .checked_div(lp_token_supply)
+        .map_err(StdError::divide_by_zero)?;
+
+    if quote_amount_to_output < min_quote_token_output {
+        return Err(ContractError::MinQuoteTokenOutputError {
+            requested: min_quote_token_output,
+            available: quote_amount_to_output,
+        });
+    }
+
+    // Update token reserves
+    BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
+        base.reserve = base
+            .reserve
+            .checked_sub(base_amount_to_output)
+            .map_err(StdError::overflow)?;
+        Ok(base)
+    })?;
+    QUOTE_TOKEN.update(deps.storage, |mut quote| -> Result<_, ContractError> {
+        quote.reserve = quote
+            .reserve
+            .checked_sub(quote_amount_to_output)
+            .map_err(StdError::overflow)?;
+        Ok(quote)
+    })?;
+
+    // Construct the messages to send the output tokens to info.sender
+    let base_token_transfer_msg = if let Denom::Native(denom) = base.denom {
+        get_bank_transfer_to_msg(&info.sender, &denom, base_amount_to_output)
+    } else {
+        // This is to satisfy the compulsory else block, it will never be called
+        return Err(ContractError::NoneError {});
+    };
+    let quote_token_transfer_msg = if let Denom::Cw20(addr) = quote.denom {
+        get_cw20_transfer_to_msg(&info.sender, &addr, quote_amount_to_output)?
+    } else {
+        // This is to satisfy the compulsory else block, it will never be called
+        return Err(ContractError::NoneError {});
+    };
+
+    // Construct message to burn lp_amount
+    let lp_token_burn_msg = get_burn_msg(&lp_token_addr, &info.sender, lp_amount)?;
+
+    // respond
+    Ok(Response::new()
+        .add_messages(vec![
+            base_token_transfer_msg,
+            quote_token_transfer_msg,
+            lp_token_burn_msg,
+        ])
+        .add_attributes(vec![
+            attr("liquidity_burned", lp_amount),
+            attr("base_token_returned", base_amount_to_output),
+            attr("quote_token_returned", quote_amount_to_output),
+        ]))
 }
 
 // todo
@@ -453,6 +599,7 @@ pub fn execute_swap(
     Ok(Response::new())
 }
 
+// todo
 pub fn execute_pass_through_swap(
     deps: DepsMut,
     info: MessageInfo,

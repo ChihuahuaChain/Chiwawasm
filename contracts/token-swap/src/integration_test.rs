@@ -377,4 +377,236 @@ mod tests {
             .unwrap();
         assert_eq!(lp_balance, Uint128::new(150));
     }
+
+    #[test]
+    fn test_remove_liquidity() {
+        let mut router = mock_app();
+        let owner = Addr::unchecked(USER);
+
+        // cw20 quote token contract
+        let quote_token_contract = create_cw20_quote_token(
+            &mut router,
+            &owner,
+            "token".to_string(),
+            "CWTOKEN".to_string(),
+            Uint128::new(5000),
+        );
+
+        // amm contract instance
+        let amm_addr = _instantiate_amm(&mut router, quote_token_contract.addr());
+
+        // make sure that quote_token_contract.addr() != amm_addr
+        assert_ne!(quote_token_contract.addr(), amm_addr);
+
+        // Query amm info
+        let info = get_amm_contract_info(&mut router, &amm_addr);
+
+        // set up cw20 helpers
+        let lp_token = Cw20Contract(Addr::unchecked(info.lp_token_address));
+
+        // check quote_token balance for owner
+        let owner_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(owner_balance, Uint128::new(5000));
+
+        // increase the spending allowance of the amm_contract on the quote_token_contract
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: amm_addr.to_string(),
+            amount: Uint128::new(100u128),
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(
+                owner.clone(),
+                quote_token_contract.addr(),
+                &allowance_msg,
+                &[],
+            )
+            .unwrap();
+
+        // Add liquidity proper and ensure balances are updated ===============================>
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: Uint128::new(100),
+            max_quote_token_amount: Uint128::new(100),
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &add_liquidity_msg,
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: Uint128::new(100),
+                }],
+            )
+            .unwrap();
+
+        // check that the owner address on the cw20 quote token contract is decreased by the amount of quote tokens added to the amm
+        let owner_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(owner_balance, Uint128::new(4900));
+
+        // check that the amm address on the cw20 quote token contract has the correct amount of quote tokens
+        let amm_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, amm_addr.clone())
+            .unwrap();
+        assert_eq!(amm_balance, Uint128::new(100));
+
+        // check that the lp token contract has the correct lp tokens minted for the owner that added the liquidity
+        let lp_balance = lp_token
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(lp_balance, Uint128::new(100));
+
+        // ContractError::MsgExpirationError {}
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::RemoveLiquidity {
+                    amount: Uint128::new(100),
+                    min_base_token_output: Uint128::new(100),
+                    min_quote_token_output: Uint128::new(100),
+                    expiration: Some(Expiration::AtHeight(0)),
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        // ContractError::InsufficientLiquidityError {}
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::RemoveLiquidity {
+                    amount: Uint128::new(200),
+                    min_base_token_output: Uint128::new(100),
+                    min_quote_token_output: Uint128::new(100),
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        // ContractError::MinBaseTokenOutputError {}
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::RemoveLiquidity {
+                    amount: Uint128::new(100),
+                    min_base_token_output: Uint128::new(200),
+                    min_quote_token_output: Uint128::new(100),
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        // ContractError::MinQuoteTokenOutputError {}
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::RemoveLiquidity {
+                    amount: Uint128::new(100),
+                    min_base_token_output: Uint128::new(100),
+                    min_quote_token_output: Uint128::new(200),
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        // Remove some liquidity and ensure balances are updated
+        // We need to also grant the amm the right to burn lp tokens of behalf of info.sender
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: amm_addr.to_string(),
+            amount: Uint128::new(50),
+            expires: None,
+        };
+        router
+            .execute_contract(owner.clone(), lp_token.addr(), &allowance_msg, &[])
+            .unwrap();
+
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::RemoveLiquidity {
+                    amount: Uint128::new(50),
+                    min_base_token_output: Uint128::new(50),
+                    min_quote_token_output: Uint128::new(50),
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap();
+
+        // Check that the owner address on the cw20 quote token contract is increased
+        // by the amount of quote tokens removed from the amm
+        let owner_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(owner_balance, Uint128::new(4950));
+
+        // check that the amm address on the cw20 quote token contract has the correct amount of quote tokens
+        let amm_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, amm_addr.clone())
+            .unwrap();
+        assert_eq!(amm_balance, Uint128::new(50));
+
+        // check that the lp token contract has the correct lp tokens
+        let lp_balance = lp_token
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(lp_balance, Uint128::new(50));
+
+        // Remove all remaining liquidity and ensure balances are updated
+        // We need to also grant the amm the right to burn lp tokens of behalf of info.sender
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: amm_addr.to_string(),
+            amount: Uint128::new(50),
+            expires: None,
+        };
+        router
+            .execute_contract(owner.clone(), lp_token.addr(), &allowance_msg, &[])
+            .unwrap();
+
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::RemoveLiquidity {
+                    amount: Uint128::new(50),
+                    min_base_token_output: Uint128::new(50),
+                    min_quote_token_output: Uint128::new(50),
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap();
+
+        // Check that the owner address on the cw20 quote token contract is increased
+        // by the amount of quote tokens removed from the amm
+        let owner_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(owner_balance, Uint128::new(5000));
+
+        // check that the amm address on the cw20 quote token contract has the correct amount of quote tokens
+        let amm_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, amm_addr.clone())
+            .unwrap();
+        assert_eq!(amm_balance, Uint128::new(0));
+
+        // check that the lp token contract has the correct lp tokens
+        let lp_balance = lp_token
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(lp_balance, Uint128::new(0));
+    }
 }

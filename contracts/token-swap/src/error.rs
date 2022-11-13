@@ -27,14 +27,14 @@ pub enum ContractError {
         available: Uint128,
     },
 
-    #[error("Min token1 error: requested: {requested}, available: {available}")]
-    MinToken1Error {
+    #[error("Min base token output error: requested: {requested}, available: {available}")]
+    MinBaseTokenOutputError {
         requested: Uint128,
         available: Uint128,
     },
 
-    #[error("Min token2 error: requested: {requested}, available: {available}")]
-    MinToken2Error {
+    #[error("Min quote token output error: requested: {requested}, available: {available}")]
+    MinQuoteTokenOutputError {
         requested: Uint128,
         available: Uint128,
     },

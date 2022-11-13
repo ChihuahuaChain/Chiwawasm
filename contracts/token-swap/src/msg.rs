@@ -30,13 +30,10 @@ pub enum ExecuteMsg {
         expiration: Option<Expiration>,
     },
 
-    ///
     RemoveLiquidity {
         amount: Uint128,
-
-        // Q?
-        min_token1: Uint128,
-        min_token2: Uint128,
+        min_base_token_output: Uint128,
+        min_quote_token_output: Uint128,
         expiration: Option<Expiration>,
     },
 
