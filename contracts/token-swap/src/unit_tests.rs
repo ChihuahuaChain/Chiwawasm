@@ -1,19 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockQuerier};
     use cosmwasm_std::{
-        to_binary, Addr, Attribute, Decimal, Empty, MemoryStorage, OwnedDeps, Reply, ReplyOn,
-        SubMsg, SubMsgResponse, SubMsgResult, Uint128, WasmMsg,
+        to_binary, Addr, Attribute, Empty, MemoryStorage, OwnedDeps, Reply, ReplyOn, SubMsg,
+        SubMsgResponse, SubMsgResult, Uint128, WasmMsg,
     };
     use cw20::{Denom, MinterResponse};
 
     use crate::contract::{
-        get_lp_token_amount_to_mint, get_required_quote_token_amount, instantiate, reply,
+        exact_input_variable_output, exact_output_variable_input, get_lp_token_amount_to_mint,
+        get_required_quote_token_amount, instantiate, reply,
     };
     use crate::msg::InstantiateMsg;
-    use crate::state::LP_TOKEN;
+    use crate::state::{SwapPrice, TokenAmount, LP_TOKEN};
     use crate::ContractError;
 
     struct InstantiationResponse {
@@ -30,7 +29,6 @@ mod tests {
             native_denom: Denom::Native(String::from("native")),
             base_denom: Denom::Cw20(Addr::unchecked("quote_as_base")),
             quote_denom: Denom::Cw20(Addr::unchecked("quote")),
-            swap_rate: Decimal::from_str("0.3").unwrap(),
             lp_token_code_id: 1234u64,
         };
 
@@ -53,7 +51,6 @@ mod tests {
             native_denom: Denom::Native(String::from("native")),
             base_denom: Denom::Native(String::from("native_but_wrong_value")),
             quote_denom: Denom::Cw20(Addr::unchecked("quote")),
-            swap_rate: Decimal::from_str("0.3").unwrap(),
             lp_token_code_id: 1234u64,
         };
 
@@ -76,7 +73,6 @@ mod tests {
             native_denom: Denom::Native(String::from("native")),
             base_denom: Denom::Native(String::from("native")),
             quote_denom: Denom::Native(String::from("native_as_quote")),
-            swap_rate: Decimal::from_str("0.3").unwrap(),
             lp_token_code_id: 1234u64,
         };
 
@@ -85,52 +81,6 @@ mod tests {
         let _err = instantiate(deps.as_mut(), env.clone(), info, msg.clone()).unwrap_err();
         match _err {
             ContractError::InvalidQuoteDenom {} => {}
-            e => panic!("unexpected error: {}", e),
-        }
-    }
-
-    #[test]
-    fn init_error_invalid_swap_rate_below_limit() {
-        let mut deps = mock_dependencies();
-        let env = mock_env();
-        let caller = String::from("cosmos2contract");
-
-        let msg = InstantiateMsg {
-            native_denom: Denom::Native(String::from("native")),
-            base_denom: Denom::Native(String::from("native")),
-            quote_denom: Denom::Cw20(Addr::unchecked("quote")),
-            swap_rate: Decimal::from_str("0.05").unwrap(),
-            lp_token_code_id: 1234u64,
-        };
-
-        // Inspect response
-        let info = mock_info(&caller, &[]);
-        let _err = instantiate(deps.as_mut(), env.clone(), info, msg.clone()).unwrap_err();
-        match _err {
-            ContractError::InvalidSwapRate {} => {}
-            e => panic!("unexpected error: {}", e),
-        }
-    }
-
-    #[test]
-    fn init_error_invalid_swap_rate_above_limit() {
-        let mut deps = mock_dependencies();
-        let env = mock_env();
-        let caller = String::from("cosmos2contract");
-
-        let msg = InstantiateMsg {
-            native_denom: Denom::Native(String::from("native")),
-            base_denom: Denom::Native(String::from("native")),
-            quote_denom: Denom::Cw20(Addr::unchecked("quote")),
-            swap_rate: Decimal::from_str("1.2").unwrap(),
-            lp_token_code_id: 1234u64,
-        };
-
-        // Inspect response
-        let info = mock_info(&caller, &[]);
-        let _err = instantiate(deps.as_mut(), env.clone(), info, msg.clone()).unwrap_err();
-        match _err {
-            ContractError::InvalidSwapRate {} => {}
             e => panic!("unexpected error: {}", e),
         }
     }
@@ -145,7 +95,6 @@ mod tests {
             native_denom: Denom::Native(String::from("native")),
             base_denom: Denom::Native(String::from("native")),
             quote_denom: Denom::Cw20(Addr::unchecked("quote")),
-            swap_rate: Decimal::from_str("0.3").unwrap(),
             lp_token_code_id: 1234u64,
         };
 
@@ -257,5 +206,105 @@ mod tests {
         )
         .unwrap();
         assert_eq!(liquidity, Uint128::new(200));
+    }
+
+    // Where q = Qb / (B + b)
+    #[test]
+    fn test_exact_input_variable_output() {
+        let exact_input_amount = Uint128::new(10_000);
+        let base_reserve = Uint128::new(100_000);
+        let quote_reserve = Uint128::new(100_000);
+        let base_denom = Denom::Native("base".to_string());
+        let quote_denom = Denom::Cw20(Addr::unchecked("quote"));
+
+        // q = 100000 * 10000 / (100000 + 10000)
+        // q = 9090 - 0.3%
+        // q = 9063
+
+        // Expect an error because calculated_output < min_output_amount
+        exact_input_variable_output(
+            exact_input_amount,
+            Uint128::new(9064),
+            base_reserve,
+            quote_reserve,
+            base_denom.clone(),
+            quote_denom.clone(),
+        )
+        .unwrap_err();
+
+        // We call the function again with min_output_amount <= calculated_output
+        let res = exact_input_variable_output(
+            exact_input_amount,
+            Uint128::new(9063),
+            base_reserve,
+            quote_reserve,
+            base_denom.clone(),
+            quote_denom.clone(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            res,
+            SwapPrice {
+                input: TokenAmount {
+                    amount: Uint128::new(10000),
+                    denom: base_denom
+                },
+                output: TokenAmount {
+                    amount: Uint128::new(9063),
+                    denom: quote_denom
+                }
+            }
+        );
+    }
+
+    // Where q = Qb / (B - b)
+    #[test]
+    fn test_exact_output_variable_input() {
+        let exact_output_amount = Uint128::new(10000);
+        let base_reserve = Uint128::new(100_000);
+        let quote_reserve = Uint128::new(100_000);
+        let base_denom = Denom::Native("base".to_string());
+        let quote_denom = Denom::Cw20(Addr::unchecked("quote"));
+
+        // q = 100000 * 10000 / (100000 - 10000)
+        // q = 11111 + 0.3%
+        // q = 11144
+
+        // Expect an error because calculated_input > max_input_amount is
+        exact_output_variable_input(
+            exact_output_amount,
+            Uint128::new(11142),
+            base_reserve,
+            quote_reserve,
+            base_denom.clone(),
+            quote_denom.clone(),
+        )
+        .unwrap_err();
+
+        // We call the function again with max_input_amount >= calculated_input
+        let res = exact_output_variable_input(
+            exact_output_amount,
+            Uint128::new(11144),
+            base_reserve,
+            quote_reserve,
+            base_denom.clone(),
+            quote_denom.clone(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            res,
+            SwapPrice {
+                output: TokenAmount {
+                    amount: Uint128::new(10000),
+                    denom: base_denom
+                },
+                input: TokenAmount {
+                    amount: Uint128::new(11144),
+                    denom: quote_denom
+                }
+            }
+        );
     }
 }

@@ -3,28 +3,24 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
+    "base_denom",
     "lp_token_code_id",
-    "token1_denom",
-    "token2_denom"
+    "native_denom",
+    "quote_denom"
   ],
   "properties": {
-    "burn_rate": {
-      "type": [
-        "integer",
-        "null"
-      ],
-      "format": "uint64",
-      "minimum": 0.0
+    "base_denom": {
+      "$ref": "#/definitions/Denom"
     },
     "lp_token_code_id": {
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
     },
-    "token1_denom": {
+    "native_denom": {
       "$ref": "#/definitions/Denom"
     },
-    "token2_denom": {
+    "quote_denom": {
       "$ref": "#/definitions/Denom"
     }
   },

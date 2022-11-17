@@ -1,16 +1,13 @@
-use std::str::FromStr;
-
 use cosmwasm_std::{
-    attr, entry_point, to_binary, Addr, BankMsg, Binary, BlockInfo, Coin, CosmosMsg, Decimal, Deps,
-    DepsMut, Env, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128,
-    WasmMsg,
+    attr, entry_point, to_binary, Addr, BankMsg, Binary, BlockInfo, Coin, CosmosMsg, Deps, DepsMut,
+    Env, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
 };
 use cw0::parse_reply_instantiate_data;
 use cw20::{Cw20ExecuteMsg, Denom, Expiration, MinterResponse};
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InfoResponse, InstantiateMsg, QueryMsg, TokenSelect};
-use crate::state::{Config, Token, BASE_TOKEN, CONFIG, LP_TOKEN, QUOTE_TOKEN};
+use crate::state::{SwapPrice, Token, TokenAmount, BASE_TOKEN, LP_TOKEN, QUOTE_TOKEN};
 
 // Version info for migration info
 pub const CONTRACT_NAME: &str = "huahuaswap";
@@ -41,27 +38,13 @@ pub fn instantiate(
     }
 
     // Verify that quote denom is of cw20 token type
+    // todo we can extedn the Denom to support IBC denom type as well
     match msg.quote_denom {
         Denom::Cw20(_) => {}
         _ => {
             return Err(ContractError::InvalidQuoteDenom {});
         }
     }
-
-    // Verify that the swap_rate is between 0.1% and 1.0%
-    if msg.swap_rate.clone() < Decimal::from_str("0.1").unwrap()
-        || msg.swap_rate.clone() > Decimal::one()
-    {
-        return Err(ContractError::InvalidSwapRate {});
-    }
-
-    // Save the swap rate
-    CONFIG.save(
-        deps.storage,
-        &Config {
-            swap_rate: msg.swap_rate,
-        },
-    )?;
 
     // Save base token
     BASE_TOKEN.save(
@@ -184,17 +167,16 @@ pub fn execute(
         ExecuteMsg::Swap {
             input_token,
             input_amount,
-            min_output,
+            output_amount,
             expiration,
-            ..
         } => execute_swap(
+            env,
             deps,
             &info,
             input_amount,
-            env,
             input_token,
+            output_amount,
             &info.sender,
-            min_output,
             expiration,
         ),
         ExecuteMsg::PassThroughSwap {
@@ -216,17 +198,17 @@ pub fn execute(
         ExecuteMsg::SwapAndSendTo {
             input_token,
             input_amount,
+            output_amount,
             recipient,
-            min_output,
             expiration,
         } => execute_swap(
+            env,
             deps,
             &info,
             input_amount,
-            env,
             input_token,
+            output_amount,
             &recipient,
-            min_output,
             expiration,
         ),
     }
@@ -261,14 +243,12 @@ fn get_amount_for_denom(coins: &[Coin], denom: &str) -> Coin {
 fn validate_base_amount(
     coins: &[Coin],
     given_amount: Uint128,
-    given_denom: &Denom,
+    denom_str: &str,
 ) -> Result<(), ContractError> {
-    if let Denom::Native(denom) = given_denom {
-        let actual = get_amount_for_denom(coins, denom);
+    let actual = get_amount_for_denom(coins, denom_str);
 
-        if actual.amount != given_amount {
-            return Err(ContractError::InsufficientFunds {});
-        }
+    if actual.amount != given_amount {
+        return Err(ContractError::InsufficientFunds {});
     }
 
     Ok(())
@@ -426,7 +406,9 @@ pub fn execute_add_liquidity(
 
     // Validate the input for the base_token_amount to know if the user
     // sent the exact amount and denom in the contract call
-    validate_base_amount(&info.funds, base_token_amount, &base.denom)?;
+    if let Denom::Native(denom) = base.denom {
+        validate_base_amount(&info.funds, base_token_amount, &denom)?;
+    }
 
     // Calculate how much lp tokens to mint
     let lp_token_supply = get_lp_token_supply(deps.as_ref(), &lp_token_addr)?;
@@ -585,18 +567,246 @@ pub fn execute_remove_liquidity(
         ]))
 }
 
-// todo
+/*
+ * When swapping from base token to quote token, we use fn exactInputVariableOutput {}
+ * Where the input_amount is the exact amount of base tokens to be swapped for a variable amount
+ * of the quote tokens such that calculated_quote_output >= output_amount
+ * Here, output_amount represents min_quote_output_amount.
+ *
+ *
+ * When swapping from quote token to base token, we use fn exactOutputVariableInput {}
+ * Where the input_amount is the max limit of quote token to be inputed in exchange for an exact amount
+ * of base token such that calculated_quote_input <= input_amount
+ * Here, input_amount represents the max_quote_input_amount.
+ *
+ *
+ * What this means is that the swap_fee is always charged to the quote token.
+ */
 pub fn execute_swap(
+    _env: Env,
     deps: DepsMut,
     info: &MessageInfo,
     input_amount: Uint128,
-    _env: Env,
-    input_token_enum: TokenSelect,
+    input_token: TokenSelect,
+    output_amount: Uint128,
     recipient: &Addr,
-    min_token: Uint128,
     expiration: Option<Expiration>,
 ) -> Result<Response, ContractError> {
-    Ok(Response::new())
+    check_expiration(&expiration, &_env.block)?;
+
+    // here we load the token reserves
+    let base = BASE_TOKEN.load(deps.storage)?;
+    let quote = QUOTE_TOKEN.load(deps.storage)?;
+
+    // Here we get the swap_prices which is the amount of input and output tokens required
+    let swap_price = match input_token {
+        TokenSelect::Base => exact_input_variable_output(
+            input_amount,
+            output_amount,
+            base.reserve,
+            quote.reserve,
+            base.denom.clone(),
+            quote.denom.clone(),
+        )?,
+
+        TokenSelect::Quote => exact_output_variable_input(
+            output_amount,
+            input_amount,
+            base.reserve,
+            quote.reserve,
+            base.denom.clone(),
+            quote.denom.clone(),
+        )?,
+    };
+
+    // Create SDK messages holder
+    let mut messages: Vec<CosmosMsg> = vec![];
+
+    // Update reserves and sdk messages for the input token
+    match swap_price.input.denom.clone() {
+        Denom::Native(denom) => {
+            validate_base_amount(&info.funds, swap_price.input.amount, &denom)?;
+
+            BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
+                base.reserve += swap_price.input.amount;
+                Ok(base)
+            })?;
+        }
+        Denom::Cw20(addr) => {
+            messages.push(get_cw20_transfer_from_msg(
+                &info.sender,
+                &_env.contract.address,
+                &addr,
+                swap_price.input.amount,
+            )?);
+
+            QUOTE_TOKEN.update(deps.storage, |mut quote| -> Result<_, ContractError> {
+                quote.reserve += swap_price.input.amount;
+                Ok(quote)
+            })?;
+        }
+    }
+
+    // Update reserves and sdk messages for the output token
+    match swap_price.output.denom.clone() {
+        Denom::Native(denom) => {
+            messages.push(get_bank_transfer_to_msg(
+                recipient,
+                &denom,
+                swap_price.output.amount,
+            ));
+
+            BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
+                base.reserve -= swap_price.output.amount;
+                Ok(base)
+            })?;
+        }
+        Denom::Cw20(addr) => {
+            messages.push(get_cw20_transfer_to_msg(
+                recipient,
+                &addr,
+                swap_price.output.amount,
+            )?);
+
+            QUOTE_TOKEN.update(deps.storage, |mut quote| -> Result<_, ContractError> {
+                quote.reserve -= swap_price.output.amount;
+                Ok(quote)
+            })?;
+        }
+    }
+
+    // Respond
+    Ok(Response::new().add_messages(messages).add_attributes(vec![
+        attr("input_amount", swap_price.input.amount),
+        attr("input_denom", format!("{:?}", swap_price.input.denom)),
+        attr("output_amount", swap_price.output.amount),
+        attr("output_denom", format!("{:?}", swap_price.output.denom)),
+    ]))
+}
+
+/**
+ * To output q and input b, we use
+ * (B + b) * (Q - q) = k, where k = B * Q
+ *
+ * Differentiate for variable output q
+ *
+ * (Q - q) = k / (B + b)
+ * q = Q - (BQ / (B + b))
+ * q * (B + b)  =  Q *  (B + b) - BQ
+ * q * (B + b) = QB + Qb - BQ
+ * q = Qb / (B + b)
+ */
+pub fn exact_input_variable_output(
+    exact_input_amount: Uint128,
+    min_output_amount: Uint128,
+    base_reserve: Uint128,
+    quote_reserve: Uint128,
+    base_denom: Denom,
+    quote_denom: Denom,
+) -> Result<SwapPrice, ContractError> {
+    let numerator = quote_reserve
+        .checked_mul(exact_input_amount)
+        .map_err(StdError::overflow)?;
+
+    let denominator = base_reserve
+        .checked_add(exact_input_amount)
+        .map_err(StdError::overflow)?;
+
+    let calculated_quote_output = numerator
+        .checked_div(denominator)
+        .map_err(StdError::divide_by_zero)?;
+
+    // Deduct swap_fee from the calculated_quote_output
+    let swap_fee = get_swap_fee(calculated_quote_output)?;
+    let calculated_quote_output = calculated_quote_output
+        .checked_sub(swap_fee)
+        .map_err(StdError::overflow)?;
+
+    // make sure calculated_quote_output >= min_output_amount
+    if calculated_quote_output < min_output_amount {
+        return Err(ContractError::SwapMinError {
+            min: min_output_amount,
+            available: calculated_quote_output,
+        });
+    }
+
+    Ok(SwapPrice {
+        input: TokenAmount {
+            amount: exact_input_amount,
+            denom: base_denom,
+        },
+        output: TokenAmount {
+            amount: calculated_quote_output,
+            denom: quote_denom,
+        },
+    })
+}
+
+// Here we hardcode the swap fees as 3/1000 or 0.3% of amount
+fn get_swap_fee(amount: Uint128) -> StdResult<Uint128> {
+    amount
+        .checked_mul(Uint128::from(3u128))
+        .map_err(StdError::overflow)?
+        .checked_div(Uint128::from(1000u128))
+        .map_err(StdError::divide_by_zero)
+}
+
+/**
+ * To output b and input q, we use
+ * (B - b) * (Q + q) = k, where k = B * Q
+ *
+ * Differentiate for variable input q
+ *
+ * (Q + q) = k / (B - b)
+ * q = -Q + ( k / (B - b))
+ * q * (B - b) = -Q *  (B - b) + BQ
+ * q * (B - b) = -QB + Qb + BQ
+ * q = Qb / (B - b)
+ */
+pub fn exact_output_variable_input(
+    exact_output_amount: Uint128,
+    max_input_amount: Uint128,
+    base_reserve: Uint128,
+    quote_reserve: Uint128,
+    base_denom: Denom,
+    quote_denom: Denom,
+) -> Result<SwapPrice, ContractError> {
+    let numerator = quote_reserve
+        .checked_mul(exact_output_amount)
+        .map_err(StdError::overflow)?;
+
+    let denominator = base_reserve
+        .checked_sub(exact_output_amount)
+        .map_err(StdError::overflow)?;
+
+    let calculated_quote_input = numerator
+        .checked_div(denominator)
+        .map_err(StdError::divide_by_zero)?;
+
+    // Add swap_fee to the calculated_quote_input
+    let swap_fee = get_swap_fee(calculated_quote_input)?;
+    let calculated_quote_input = calculated_quote_input
+        .checked_add(swap_fee)
+        .map_err(StdError::overflow)?;
+
+    // make sure calculated_quote_input <= max_input_amount
+    if calculated_quote_input > max_input_amount {
+        return Err(ContractError::SwapMaxError {
+            max: max_input_amount,
+            required: calculated_quote_input,
+        });
+    }
+
+    Ok(SwapPrice {
+        input: TokenAmount {
+            amount: calculated_quote_input,
+            denom: quote_denom,
+        },
+        output: TokenAmount {
+            amount: exact_output_amount,
+            denom: base_denom,
+        },
+    })
 }
 
 // todo
@@ -626,7 +836,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 pub fn query_info(deps: Deps) -> StdResult<InfoResponse> {
     let base = BASE_TOKEN.load(deps.storage)?;
     let quote = QUOTE_TOKEN.load(deps.storage)?;
-    let config = CONFIG.load(deps.storage)?;
     let lp_token_address = LP_TOKEN.load(deps.storage)?;
 
     Ok(InfoResponse {
@@ -634,7 +843,6 @@ pub fn query_info(deps: Deps) -> StdResult<InfoResponse> {
         base_denom: base.denom,
         quote_reserve: quote.reserve,
         quote_denom: quote.denom,
-        swap_rate: config.swap_rate,
         lp_token_supply: get_lp_token_supply(deps, &lp_token_address)?,
         lp_token_address: lp_token_address,
     })

@@ -11,11 +11,13 @@
         "add_liquidity": {
           "type": "object",
           "required": [
-            "max_token2",
-            "min_liquidity",
-            "token1_amount"
+            "base_token_amount",
+            "max_quote_token_amount"
           ],
           "properties": {
+            "base_token_amount": {
+              "$ref": "#/definitions/Uint128"
+            },
             "expiration": {
               "anyOf": [
                 {
@@ -26,13 +28,7 @@
                 }
               ]
             },
-            "max_token2": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "min_liquidity": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "token1_amount": {
+            "max_quote_token_amount": {
               "$ref": "#/definitions/Uint128"
             }
           }
@@ -50,8 +46,8 @@
           "type": "object",
           "required": [
             "amount",
-            "min_token1",
-            "min_token2"
+            "min_base_token_output",
+            "min_quote_token_output"
           ],
           "properties": {
             "amount": {
@@ -67,10 +63,10 @@
                 }
               ]
             },
-            "min_token1": {
+            "min_base_token_output": {
               "$ref": "#/definitions/Uint128"
             },
-            "min_token2": {
+            "min_quote_token_output": {
               "$ref": "#/definitions/Uint128"
             }
           }
@@ -89,7 +85,7 @@
           "required": [
             "input_amount",
             "input_token",
-            "min_output"
+            "output_amount"
           ],
           "properties": {
             "expiration": {
@@ -108,8 +104,50 @@
             "input_token": {
               "$ref": "#/definitions/TokenSelect"
             },
-            "min_output": {
+            "output_amount": {
               "$ref": "#/definitions/Uint128"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "swap_and_send_to"
+      ],
+      "properties": {
+        "swap_and_send_to": {
+          "type": "object",
+          "required": [
+            "input_amount",
+            "input_token",
+            "output_amount",
+            "recipient"
+          ],
+          "properties": {
+            "expiration": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Expiration"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "input_amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "input_token": {
+              "$ref": "#/definitions/TokenSelect"
+            },
+            "output_amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "recipient": {
+              "$ref": "#/definitions/Addr"
             }
           }
         }
@@ -153,48 +191,6 @@
             },
             "output_min_token": {
               "$ref": "#/definitions/Uint128"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "swap_and_send_to"
-      ],
-      "properties": {
-        "swap_and_send_to": {
-          "type": "object",
-          "required": [
-            "input_amount",
-            "input_token",
-            "min_token",
-            "recipient"
-          ],
-          "properties": {
-            "expiration": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Expiration"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "input_amount": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "input_token": {
-              "$ref": "#/definitions/TokenSelect"
-            },
-            "min_token": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "recipient": {
-              "$ref": "#/definitions/Addr"
             }
           }
         }
@@ -264,8 +260,8 @@
     "TokenSelect": {
       "type": "string",
       "enum": [
-        "Token1",
-        "Token2"
+        "Base",
+        "Quote"
       ]
     },
     "Uint128": {

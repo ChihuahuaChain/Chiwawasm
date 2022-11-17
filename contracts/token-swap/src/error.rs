@@ -42,6 +42,9 @@ pub enum ContractError {
     #[error("Swap min error: min: {min}, available: {available}")]
     SwapMinError { min: Uint128, available: Uint128 },
 
+    #[error("Swap max error: max: {max}, required: {required}")]
+    SwapMaxError { max: Uint128, required: Uint128 },
+
     #[error("MsgExpirationError")]
     MsgExpirationError {},
 
@@ -65,9 +68,6 @@ pub enum ContractError {
 
     #[error("Quote denom is not a cw20 token")]
     InvalidQuoteDenom {},
-
-    #[error("Swap rate should be between 0.1% and 1.0%")]
-    InvalidSwapRate {},
 
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },

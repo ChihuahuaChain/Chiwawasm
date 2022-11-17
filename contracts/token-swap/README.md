@@ -4,7 +4,7 @@
 
 One such rule is the constant product formula B * Q = k, where B and Q are the reserves of the Base(B) and Quote(Q) token pair.
 
-In order to withdraw some amount of Base tokens, one must deposit a proportional amount of Quote tokens to maintain the constant k before swap_rate is applied and vice-versa.
+In order to withdraw some amount of Base tokens, one must deposit a proportional amount of Quote tokens to maintain the constant k before swap_fee_rate is applied and vice-versa.
 
 &nbsp;
 
@@ -82,7 +82,7 @@ Differentiate for output b
 
 B - b = k / (Q + q)
 
-b = B - k / (Q + q)
+b = B - (k / (Q + q))
 
 b = B - (B * Q) / (Q + q)
 
@@ -94,22 +94,6 @@ b = Bq / (Q + q)
 
 &nbsp;
 
-### To get output_amount 
-
-based on the constant product formula and the current swap_rate
-
-output_amount = calculated_output - (swap_rate * calculated_output)
-
-&nbsp;
-
-### To calculate min_output_amount
-
-min_output = calculated_output - ((swap_rate + slippage) * calculated_output)
-
-When output_amount < min_output the swap is abourted as it is below the tolerance level for the trade.
-
-&nbsp;
-
 ### Price impact
 
 This difference between the current market price and the expected fill price is called price impact.
@@ -117,7 +101,7 @@ This difference between the current market price and the expected fill price is 
 Price impact is a function of
 the size of your trade relative to the size of the liquidity pool.
 
-i = (pool_price_before) - (pool_price_after), where pool_price = Q/B
+price_impact = pool_price_after - pool_price_before , where pool_price = Q/B
 
 &nbsp;
 
@@ -127,7 +111,7 @@ i = (pool_price_before) - (pool_price_after), where pool_price = Q/B
 
 ## Future upgrades
 
-Supporting concentrated liquidity pools. 
+IBC assets liquidity pools. 
 
 &nbsp;
 

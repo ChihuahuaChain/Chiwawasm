@@ -1,13 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use std::ops::Add;
-    use std::str::FromStr;
-
-    use crate::helpers::CwTemplateContract;
     use crate::msg::{ExecuteMsg, InfoResponse, InstantiateMsg, QueryMsg, TokenSelect};
-    use crate::state::Config;
-    use crate::ContractError;
-    use cosmwasm_std::{coins, Addr, Coin, Decimal, Empty, Uint128};
+    use cosmwasm_std::{Addr, Coin, Empty, Uint128};
     use cw20::{Cw20Coin, Cw20Contract, Cw20ExecuteMsg, Denom, Expiration};
     use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
 
@@ -99,7 +93,6 @@ mod tests {
             native_denom: Denom::Native(NATIVE_DENOM.to_string()),
             base_denom: Denom::Native(NATIVE_DENOM.to_string()),
             quote_denom: Denom::Cw20(quote_token_addr),
-            swap_rate: Decimal::from_str("0.3").unwrap(),
             lp_token_code_id: lp_code_id,
         };
 
@@ -113,8 +106,6 @@ mod tests {
                 None,
             )
             .unwrap();
-
-        let cw_template_contract = CwTemplateContract(template_contract_addr.clone());
 
         // return addr
         template_contract_addr
@@ -133,7 +124,7 @@ mod tests {
             Uint128::new(500_000_000),
         );
 
-        let mut amm_addr = _instantiate_amm(&mut app, quote_token_contract.addr());
+        let amm_addr = _instantiate_amm(&mut app, quote_token_contract.addr());
 
         // Query for the contract info to assert that the lp token and other important
         // data was indeed saved
@@ -146,7 +137,6 @@ mod tests {
                 base_reserve: Uint128::zero(),
                 quote_reserve: Uint128::zero(),
                 quote_denom: Denom::Cw20(quote_token_contract.addr()),
-                swap_rate: Decimal::from_str("0.3").unwrap(),
                 lp_token_supply: Uint128::zero(),
                 lp_token_address: Addr::unchecked("contract2")
             }
@@ -461,6 +451,7 @@ mod tests {
             .unwrap();
         assert_eq!(lp_balance, Uint128::new(100));
 
+        // Test All Error Cases
         // ContractError::MsgExpirationError {}
         router
             .execute_contract(
@@ -608,5 +599,246 @@ mod tests {
             .balance::<_, _, Empty>(&router, owner.clone())
             .unwrap();
         assert_eq!(lp_balance, Uint128::new(0));
+    }
+
+    #[test]
+    fn test_swap() {
+        let mut router = mock_app();
+        let owner = Addr::unchecked(USER);
+
+        // cw20 quote token contract
+        let quote_token_contract = create_cw20_quote_token(
+            &mut router,
+            &owner,
+            "token".to_string(),
+            "CWTOKEN".to_string(),
+            Uint128::new(200_000),
+        );
+
+        // amm contract instance
+        let amm_addr = _instantiate_amm(&mut router, quote_token_contract.addr());
+
+        // make sure that quote_token_contract.addr() != amm_addr
+        assert_ne!(quote_token_contract.addr(), amm_addr);
+
+        // Query amm info
+        let info = get_amm_contract_info(&mut router, &amm_addr);
+
+        // set up cw20 helpers
+        let lp_token = Cw20Contract(Addr::unchecked(info.lp_token_address));
+
+        // check quote_token balance for owner
+        let owner_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(owner_balance, Uint128::new(200_000));
+
+        // increase the spending allowance of the amm_contract on the quote_token_contract
+        // on behalf of owner
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: amm_addr.to_string(),
+            amount: Uint128::new(100_000u128),
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(
+                owner.clone(),
+                quote_token_contract.addr(),
+                &allowance_msg,
+                &[],
+            )
+            .unwrap();
+
+        // Add liquidity proper and ensure balances are updated ===============================>
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: Uint128::new(100_000),
+            max_quote_token_amount: Uint128::new(100_000),
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &add_liquidity_msg,
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: Uint128::new(100_000),
+                }],
+            )
+            .unwrap();
+
+        // check that the owner address on the cw20 quote token contract is decreased
+        // by the amount of quote tokens added to the amm
+        let owner_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(owner_balance, Uint128::new(100_000));
+
+        // check that the amm address on the cw20 quote token contract has the correct amount of quote tokens
+        let amm_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, amm_addr.clone())
+            .unwrap();
+        assert_eq!(amm_balance, Uint128::new(100_000));
+
+        // check that the lp token contract has the correct lp tokens minted for the owner that added the liquidity
+        let lp_balance = lp_token
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(lp_balance, Uint128::new(100_000));
+
+        // Test All Error Cases
+        // ContractError::MsgExpirationError {}
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::Swap {
+                    input_token: TokenSelect::Base,
+                    input_amount: Uint128::new(10_000),
+                    output_amount: Uint128::new(9063),
+                    expiration: Some(Expiration::AtHeight(0)),
+                },
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: Uint128::new(10_000),
+                }],
+            )
+            .unwrap_err();
+
+        // ContractError::SwapMinError {}
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::Swap {
+                    input_token: TokenSelect::Base,
+                    input_amount: Uint128::new(10_000),
+
+                    // Expected min_output is 9063 <= calculated_output
+                    output_amount: Uint128::new(9064),
+                    expiration: None,
+                },
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: Uint128::new(10_000),
+                }],
+            )
+            .unwrap_err();
+
+        // ContractError::SwapMaxError {}
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::Swap {
+                    input_token: TokenSelect::Quote,
+
+                    // Expected max_input of 11144 >= calculated_input
+                    input_amount: Uint128::new(11143),
+                    output_amount: Uint128::new(10_000),
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        // ContractError::InsufficientFunds {}
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::Swap {
+                    input_token: TokenSelect::Base,
+                    input_amount: Uint128::new(10_000),
+                    output_amount: Uint128::new(9063),
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        // Do a swap from base token to quote tokens and verify token balances
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::Swap {
+                    input_token: TokenSelect::Base,
+                    input_amount: Uint128::new(10_000),
+                    output_amount: Uint128::new(9063),
+                    expiration: None,
+                },
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: Uint128::new(10_000),
+                }],
+            )
+            .unwrap();
+
+        // check that the amm address on the cw20 quote token contract has the correct amount of quote tokens
+        let amm_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, amm_addr.clone())
+            .unwrap();
+        assert_eq!(amm_balance, Uint128::new(90937));
+
+        // check that the owner address on the cw20 quote token contract is decreased by the amount of quote tokens added to the amm
+        let owner_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(owner_balance, Uint128::new(109_063));
+
+        // At this point after the first swap above we now have,
+        // quote_reserve = 90937
+        // base_reserve = 110_000
+        //
+        // increase the spending allowance of the amm_contract on the quote_token_contract
+        // on behalf of owner
+
+        // Calculate for how much quote tokens allowance do we need in exchange for 10_000 base tokens
+        // Where q = Qb / (B - b)
+        // q = 90937 * 10000 / (110_000 - 10000)
+        // q = 9093.7 + 0.3%
+        // q = 9120
+        let max_quote_input = Uint128::new(9120u128);
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: amm_addr.to_string(),
+            amount: max_quote_input,
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(
+                owner.clone(),
+                quote_token_contract.addr(),
+                &allowance_msg,
+                &[],
+            )
+            .unwrap();
+
+        // do swap from quote to base and verify outputs
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &ExecuteMsg::Swap {
+                    input_token: TokenSelect::Quote,
+                    input_amount: max_quote_input,
+                    output_amount: Uint128::new(10_000),
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap();
+
+        // check that the amm address on the cw20 quote token contract has the correct amount of quote tokens
+        let amm_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, amm_addr.clone())
+            .unwrap();
+        assert_eq!(amm_balance, Uint128::new(90937) + max_quote_input);
+
+        // check that the owner address on the cw20 quote token contract is decreased by the amount of quote tokens added to the amm
+        let owner_balance = quote_token_contract
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(owner_balance, Uint128::new(109_063) - max_quote_input);
     }
 }

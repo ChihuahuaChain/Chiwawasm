@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Decimal, Uint128};
+use cosmwasm_std::{Addr, Uint128};
 use cw20::{Denom, Expiration};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,6 @@ pub struct InstantiateMsg {
     pub base_denom: Denom,
     pub quote_denom: Denom,
     pub lp_token_code_id: u64,
-    pub swap_rate: Decimal,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -37,14 +36,22 @@ pub enum ExecuteMsg {
         expiration: Option<Expiration>,
     },
 
-    /// Todo read about how to write proper rust docs.
     Swap {
         input_token: TokenSelect,
         input_amount: Uint128,
-        min_output: Uint128,
+        output_amount: Uint128,
         expiration: Option<Expiration>,
     },
 
+    SwapAndSendTo {
+        input_token: TokenSelect,
+        input_amount: Uint128,
+        output_amount: Uint128,
+        recipient: Addr,
+        expiration: Option<Expiration>,
+    },
+
+    // todo
     /// Chained swap converting A -> B and B -> C by leveraging two swap contracts
     PassThroughSwap {
         // Q?
@@ -53,14 +60,6 @@ pub enum ExecuteMsg {
         input_token_amount: Uint128,
         output_min_token: Uint128,
         expiration: Option<Expiration>,
-    },
-
-    SwapAndSendTo {
-        input_token: TokenSelect,
-        input_amount: Uint128,
-        min_output: Uint128,
-        expiration: Option<Expiration>,
-        recipient: Addr,
     },
 }
 
@@ -80,7 +79,6 @@ pub struct InfoResponse {
     pub base_denom: Denom,
     pub quote_reserve: Uint128,
     pub quote_denom: Denom,
-    pub swap_rate: Decimal,
     pub lp_token_supply: Uint128,
     pub lp_token_address: Addr,
 }
