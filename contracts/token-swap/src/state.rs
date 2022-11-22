@@ -23,5 +23,6 @@ pub struct SwapPrice {
 }
 
 pub const LP_TOKEN: Item<Addr> = Item::new("lp_token");
+pub const NATIVE_DENOM: Item<Denom> = Item::new("native_denom");
 pub const BASE_TOKEN: Item<Token> = Item::new("base_token");
 pub const QUOTE_TOKEN: Item<Token> = Item::new("quote_token");

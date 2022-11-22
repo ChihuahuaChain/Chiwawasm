@@ -7,7 +7,9 @@ use cw20::{Cw20ExecuteMsg, Denom, Expiration, MinterResponse};
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InfoResponse, InstantiateMsg, QueryMsg, TokenSelect};
-use crate::state::{SwapPrice, Token, TokenAmount, BASE_TOKEN, LP_TOKEN, QUOTE_TOKEN};
+use crate::state::{
+    SwapPrice, Token, TokenAmount, BASE_TOKEN, LP_TOKEN, NATIVE_DENOM, QUOTE_TOKEN,
+};
 
 // Version info for migration info
 pub const CONTRACT_NAME: &str = "huahuaswap";
@@ -24,11 +26,11 @@ pub fn instantiate(
     // Store the contract name and version
     cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    // Check that base denom is of Native token type
-    match msg.base_denom {
+    // Check that native denom is of Native token type
+    match msg.native_denom {
         Denom::Native(_) => {}
         _ => {
-            return Err(ContractError::InvalidBaseDenom {});
+            return Err(ContractError::InvalidNativeDenom {});
         }
     }
 
@@ -37,14 +39,13 @@ pub fn instantiate(
         return Err(ContractError::NativeTokenNotProvidedInPair {});
     }
 
-    // Verify that quote denom is of cw20 token type
-    // todo we can extedn the Denom to support IBC denom type as well
-    match msg.quote_denom {
-        Denom::Cw20(_) => {}
-        _ => {
-            return Err(ContractError::InvalidQuoteDenom {});
-        }
+    // Check that the quote denom != base denom
+    if msg.base_denom.clone().eq(&msg.quote_denom.clone()) {
+        return Err(ContractError::InvalidQuoteDenom {});
     }
+
+    // Save the native denom
+    NATIVE_DENOM.save(deps.storage, &msg.native_denom)?;
 
     // Save base token
     BASE_TOKEN.save(
@@ -179,22 +180,7 @@ pub fn execute(
             &info.sender,
             expiration,
         ),
-        ExecuteMsg::PassThroughSwap {
-            output_amm_address,
-            input_token,
-            input_token_amount,
-            output_min_token,
-            expiration,
-        } => execute_pass_through_swap(
-            deps,
-            info,
-            env,
-            output_amm_address,
-            input_token,
-            input_token_amount,
-            output_min_token,
-            expiration,
-        ),
+
         ExecuteMsg::SwapAndSendTo {
             input_token,
             input_amount,
@@ -209,6 +195,22 @@ pub fn execute(
             input_token,
             output_amount,
             &recipient,
+            expiration,
+        ),
+        ExecuteMsg::PassThroughSwap {
+            output_amm_address,
+            input_token,
+            input_token_amount,
+            output_min_token,
+            expiration,
+        } => execute_pass_through_swap(
+            deps,
+            info,
+            env,
+            output_amm_address,
+            input_token,
+            input_token_amount,
+            output_min_token,
             expiration,
         ),
     }
@@ -240,7 +242,7 @@ fn get_amount_for_denom(coins: &[Coin], denom: &str) -> Coin {
     }
 }
 
-fn validate_base_amount(
+fn validate_native_amount(
     coins: &[Coin],
     given_amount: Uint128,
     denom_str: &str,
@@ -346,7 +348,7 @@ fn get_bank_transfer_to_msg(recipient: &Addr, denom: &str, native_amount: Uint12
     let transfer_bank_msg = BankMsg::Send {
         to_address: recipient.into(),
         amount: vec![Coin {
-            denom: denom.to_string(),
+            denom: denom.into(),
             amount: native_amount,
         }],
     };
@@ -407,7 +409,13 @@ pub fn execute_add_liquidity(
     // Validate the input for the base_token_amount to know if the user
     // sent the exact amount and denom in the contract call
     if let Denom::Native(denom) = base.denom {
-        validate_base_amount(&info.funds, base_token_amount, &denom)?;
+        validate_native_amount(&info.funds, base_token_amount, &denom)?;
+    }
+
+    // If the quote token is Native, validate the input for max_quote_token_amount
+    // to know if the user sent the exact amount and denom in the contract call
+    if let Denom::Native(denom) = quote.denom.clone() {
+        validate_native_amount(&info.funds, max_quote_token_amount, &denom)?;
     }
 
     // Calculate how much lp tokens to mint
@@ -431,16 +439,28 @@ pub fn execute_add_liquidity(
         });
     }
 
-    // Generate CW20 transfer message to transfer required_quote_token_amount
-    // from caller address to contract address
-    let mut transfer_msg = vec![];
-    if let Denom::Cw20(addr) = quote.denom.clone() {
-        transfer_msg.push(get_cw20_transfer_from_msg(
-            &info.sender,
-            &env.contract.address,
-            &addr,
-            required_quote_token_amount,
-        )?);
+    // Generate SDK message for token transfers and LP tokens mint
+    let mut sdk_msgs = vec![];
+
+    match quote.denom {
+        Denom::Cw20(addr) => {
+            sdk_msgs.push(get_cw20_transfer_from_msg(
+                &info.sender,
+                &env.contract.address,
+                &addr,
+                required_quote_token_amount,
+            )?);
+        }
+
+        Denom::Native(denom) => {
+            // If the quote token is Native and required_quote_token_amount < max_quote_token_amount
+            // we return the difference to info.sender
+            if required_quote_token_amount < max_quote_token_amount {
+                let change = max_quote_token_amount - required_quote_token_amount;
+
+                sdk_msgs.push(get_bank_transfer_to_msg(&info.sender, &denom, change));
+            }
+        }
     }
 
     // Update token reserves
@@ -454,17 +474,18 @@ pub fn execute_add_liquidity(
     })?;
 
     // Mint LP tokens
-    let mint_msg = mint_lp_tokens(&info.sender, liquidity_amount, &lp_token_addr)?;
+    sdk_msgs.push(mint_lp_tokens(
+        &info.sender,
+        liquidity_amount,
+        &lp_token_addr,
+    )?);
 
     // respond
-    Ok(Response::new()
-        .add_messages(transfer_msg)
-        .add_message(mint_msg)
-        .add_attributes(vec![
-            attr("base_token_amount", base_token_amount),
-            attr("required_quote_token_amount", required_quote_token_amount),
-            attr("liquidity_received", liquidity_amount),
-        ]))
+    Ok(Response::new().add_messages(sdk_msgs).add_attributes(vec![
+        attr("base_token_amount", base_token_amount),
+        attr("required_quote_token_amount", required_quote_token_amount),
+        attr("liquidity_received", liquidity_amount),
+    ]))
 }
 
 pub fn execute_remove_liquidity(
@@ -520,51 +541,62 @@ pub fn execute_remove_liquidity(
         });
     }
 
+    // Generate SDK messages for token transfers and LP tokens burn
+    let mut sdk_msgs = vec![];
+
+    // Construct the messages to send the output tokens to info.sender
+    match base.denom {
+        Denom::Native(denom) => {
+            sdk_msgs.push(get_bank_transfer_to_msg(
+                &info.sender,
+                &denom,
+                base_amount_to_output,
+            ));
+        }
+        _ => {
+            // This branch is never called because
+            // we already enforced only Native as base token
+        }
+    }
+
+    match quote.denom {
+        Denom::Cw20(addr) => {
+            sdk_msgs.push(get_cw20_transfer_to_msg(
+                &info.sender,
+                &addr,
+                quote_amount_to_output,
+            )?);
+        }
+
+        Denom::Native(denom) => {
+            // Send the native token to info.sender
+            sdk_msgs.push(get_bank_transfer_to_msg(
+                &info.sender,
+                &denom,
+                quote_amount_to_output,
+            ));
+        }
+    }
+
     // Update token reserves
     BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
-        base.reserve = base
-            .reserve
-            .checked_sub(base_amount_to_output)
-            .map_err(StdError::overflow)?;
+        base.reserve -= base_amount_to_output;
         Ok(base)
     })?;
     QUOTE_TOKEN.update(deps.storage, |mut quote| -> Result<_, ContractError> {
-        quote.reserve = quote
-            .reserve
-            .checked_sub(quote_amount_to_output)
-            .map_err(StdError::overflow)?;
+        quote.reserve -= quote_amount_to_output;
         Ok(quote)
     })?;
 
-    // Construct the messages to send the output tokens to info.sender
-    let base_token_transfer_msg = if let Denom::Native(denom) = base.denom {
-        get_bank_transfer_to_msg(&info.sender, &denom, base_amount_to_output)
-    } else {
-        // This is to satisfy the compulsory else block, it will never be called
-        return Err(ContractError::NoneError {});
-    };
-    let quote_token_transfer_msg = if let Denom::Cw20(addr) = quote.denom {
-        get_cw20_transfer_to_msg(&info.sender, &addr, quote_amount_to_output)?
-    } else {
-        // This is to satisfy the compulsory else block, it will never be called
-        return Err(ContractError::NoneError {});
-    };
-
     // Construct message to burn lp_amount
-    let lp_token_burn_msg = get_burn_msg(&lp_token_addr, &info.sender, lp_amount)?;
+    sdk_msgs.push(get_burn_msg(&lp_token_addr, &info.sender, lp_amount)?);
 
     // respond
-    Ok(Response::new()
-        .add_messages(vec![
-            base_token_transfer_msg,
-            quote_token_transfer_msg,
-            lp_token_burn_msg,
-        ])
-        .add_attributes(vec![
-            attr("liquidity_burned", lp_amount),
-            attr("base_token_returned", base_amount_to_output),
-            attr("quote_token_returned", quote_amount_to_output),
-        ]))
+    Ok(Response::new().add_messages(sdk_msgs).add_attributes(vec![
+        attr("liquidity_burned", lp_amount),
+        attr("base_token_returned", base_amount_to_output),
+        attr("quote_token_returned", quote_amount_to_output),
+    ]))
 }
 
 /*
@@ -620,20 +652,51 @@ pub fn execute_swap(
     };
 
     // Create SDK messages holder
-    let mut messages: Vec<CosmosMsg> = vec![];
+    let mut sdk_msgs = vec![];
+
+    // Here we get the native_denom
+    let native_denom_enum = NATIVE_DENOM.load(deps.storage)?;
+    let native_denom = match native_denom_enum.clone() {
+        Denom::Native(native_denom) => native_denom,
+        Denom::Cw20(_) => {
+            // this will never be called because we already ensured
+            // that the native_denom_enum is always native
+            return Err(ContractError::NoneError {});
+        }
+    };
 
     // Update reserves and sdk messages for the input token
     match swap_price.input.denom.clone() {
-        Denom::Native(denom) => {
-            validate_base_amount(&info.funds, swap_price.input.amount, &denom)?;
+        Denom::Native(input_denom) => {
+            match input_denom == native_denom {
+                true => {
+                    validate_native_amount(&info.funds, swap_price.input.amount, &input_denom)?;
 
-            BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
-                base.reserve += swap_price.input.amount;
-                Ok(base)
-            })?;
+                    BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
+                        base.reserve += swap_price.input.amount;
+                        Ok(base)
+                    })?;
+                }
+                false => {
+                    validate_native_amount(&info.funds, input_amount, &input_denom)?;
+
+                    // Return change if input_amount > swap_price.input.amount
+                    if input_amount > swap_price.input.amount {
+                        let change = input_amount - swap_price.input.amount;
+
+                        sdk_msgs.push(get_bank_transfer_to_msg(&info.sender, &input_denom, change));
+                    }
+
+                    QUOTE_TOKEN.update(deps.storage, |mut quote| -> Result<_, ContractError> {
+                        quote.reserve += swap_price.input.amount;
+                        Ok(quote)
+                    })?;
+                }
+            }
         }
+
         Denom::Cw20(addr) => {
-            messages.push(get_cw20_transfer_from_msg(
+            sdk_msgs.push(get_cw20_transfer_from_msg(
                 &info.sender,
                 &_env.contract.address,
                 &addr,
@@ -649,20 +712,31 @@ pub fn execute_swap(
 
     // Update reserves and sdk messages for the output token
     match swap_price.output.denom.clone() {
-        Denom::Native(denom) => {
-            messages.push(get_bank_transfer_to_msg(
+        Denom::Native(output_denom) => {
+            sdk_msgs.push(get_bank_transfer_to_msg(
                 recipient,
-                &denom,
+                &output_denom,
                 swap_price.output.amount,
             ));
 
-            BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
-                base.reserve -= swap_price.output.amount;
-                Ok(base)
-            })?;
+            match native_denom == output_denom {
+                true => {
+                    BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
+                        base.reserve -= swap_price.output.amount;
+                        Ok(base)
+                    })?;
+                }
+                false => {
+                    QUOTE_TOKEN.update(deps.storage, |mut quote| -> Result<_, ContractError> {
+                        quote.reserve -= swap_price.output.amount;
+                        Ok(quote)
+                    })?;
+                }
+            }
         }
+
         Denom::Cw20(addr) => {
-            messages.push(get_cw20_transfer_to_msg(
+            sdk_msgs.push(get_cw20_transfer_to_msg(
                 recipient,
                 &addr,
                 swap_price.output.amount,
@@ -676,7 +750,7 @@ pub fn execute_swap(
     }
 
     // Respond
-    Ok(Response::new().add_messages(messages).add_attributes(vec![
+    Ok(Response::new().add_messages(sdk_msgs).add_attributes(vec![
         attr("input_amount", swap_price.input.amount),
         attr("input_denom", format!("{:?}", swap_price.input.denom)),
         attr("output_amount", swap_price.output.amount),
@@ -809,7 +883,6 @@ pub fn exact_output_variable_input(
     })
 }
 
-// todo
 pub fn execute_pass_through_swap(
     deps: DepsMut,
     info: MessageInfo,
@@ -820,6 +893,7 @@ pub fn execute_pass_through_swap(
     output_min_token: Uint128,
     expiration: Option<Expiration>,
 ) -> Result<Response, ContractError> {
+    // todo implement this
     Ok(Response::new())
 }
 

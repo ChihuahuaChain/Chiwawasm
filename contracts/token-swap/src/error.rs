@@ -64,7 +64,7 @@ pub enum ContractError {
     NativeTokenNotProvidedInPair {},
 
     #[error("Base denom is not a native token")]
-    InvalidBaseDenom {},
+    InvalidNativeDenom {},
 
     #[error("Quote denom is not a cw20 token")]
     InvalidQuoteDenom {},

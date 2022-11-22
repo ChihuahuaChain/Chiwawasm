@@ -3,8 +3,13 @@ use cw20::{Denom, Expiration};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-// Note: This contract only handles pairing HUAHUA to cw20
-// we can add support for IBC tokens as well
+// Note: This contract supports
+// Native : Native
+// Native : IBC
+// Native : Cw20
+// Token pairings
+// Also the contract is currently constrained to the use of only HUAHUA as base
+// while any other token can be used as quote
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     // {"native":"udenom"} or {"cw20":"addr"}
@@ -52,7 +57,7 @@ pub enum ExecuteMsg {
     },
 
     // todo
-    /// Chained swap converting A -> B and B -> C by leveraging two swap contracts
+    /// Chained swap converting Q -> B and B -> Q' by leveraging two swap contracts
     PassThroughSwap {
         // Q?
         output_amm_address: Addr,

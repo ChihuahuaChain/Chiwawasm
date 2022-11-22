@@ -20,14 +20,14 @@ mod tests {
     }
 
     #[test]
-    fn init_error_invalid_base_denom() {
+    fn init_error_invalid_native_denom() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let caller = String::from("cosmos2contract");
 
         let msg = InstantiateMsg {
-            native_denom: Denom::Native(String::from("native")),
-            base_denom: Denom::Cw20(Addr::unchecked("quote_as_base")),
+            native_denom: Denom::Cw20(Addr::unchecked("non_native")),
+            base_denom: Denom::Cw20(Addr::unchecked("non_native")),
             quote_denom: Denom::Cw20(Addr::unchecked("quote")),
             lp_token_code_id: 1234u64,
         };
@@ -36,7 +36,7 @@ mod tests {
         let info = mock_info(&caller, &[]);
         let _err = instantiate(deps.as_mut(), env.clone(), info, msg.clone()).unwrap_err();
         match _err {
-            ContractError::InvalidBaseDenom {} => {}
+            ContractError::InvalidNativeDenom {} => {}
             e => panic!("unexpected error: {}", e),
         }
     }
@@ -50,7 +50,7 @@ mod tests {
         let msg = InstantiateMsg {
             native_denom: Denom::Native(String::from("native")),
             base_denom: Denom::Native(String::from("native_but_wrong_value")),
-            quote_denom: Denom::Cw20(Addr::unchecked("quote")),
+            quote_denom: Denom::Native(String::from("ibc/token")),
             lp_token_code_id: 1234u64,
         };
 
@@ -72,7 +72,7 @@ mod tests {
         let msg = InstantiateMsg {
             native_denom: Denom::Native(String::from("native")),
             base_denom: Denom::Native(String::from("native")),
-            quote_denom: Denom::Native(String::from("native_as_quote")),
+            quote_denom: Denom::Native(String::from("native")),
             lp_token_code_id: 1234u64,
         };
 
