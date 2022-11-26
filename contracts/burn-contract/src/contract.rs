@@ -10,7 +10,7 @@ use crate::msg::{BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg, SudoMsg}
 use crate::state::{Config, BURN_READY_TIMESTAMP, INIT_CONFIG};
 
 // version info for migration info
-const CONTRACT_NAME: &str = "crates.io:my-first-contract";
+const CONTRACT_NAME: &str = "crates.io:burn-contract";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg_attr(not(feature = "library"), entry_point)]

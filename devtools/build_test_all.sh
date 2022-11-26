@@ -12,7 +12,6 @@ for example in ./contracts/*/; do
   echo "Building and testing $example ..."
   (
     cd "$example"
-    cargo fmt
     cargo build
     cargo unit-test
     cargo wasm

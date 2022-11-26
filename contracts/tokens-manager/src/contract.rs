@@ -14,7 +14,7 @@ use cw_storage_plus::Bound;
 use cw_utils::parse_reply_instantiate_data;
 
 // version info for migration info
-const CONTRACT_NAME: &str = "crates.io:my-first-contract";
+const CONTRACT_NAME: &str = "crates.io:token-manager";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const INSTANTIATE_REPLY_ID: u64 = 1u64;
 

@@ -15,11 +15,21 @@ This allows us to compile all contracts with one command.
 
 The following contracts are available for use. For each of the contracts in `contracts`, you can view the source code under `src`
 
-* [Burn-Contract](https://github.com/ChihuahuaChain/CosmWasm/tree/main/contracts/burn-contract) - A basic contract to burn token balances
+* [Burn-Contract](https://github.com/ChihuahuaChain/CosmWasm/tree/main/contracts/burn-contract)
 
-* [Tokens-Manger](https://github.com/ChihuahuaChain/Chiwawasm/tree/main/contracts/tokens-manager) - The cw20 tokens manager allow users to pay a `token_creation_fee` to mint cw20 tokens managed by this contract
+A basic contract to burn token balances
 
-You can get more info from the `README.md` file in each of the contacts.
+&nbsp;
+
+* [Tokens-Manger](https://github.com/ChihuahuaChain/Chiwawasm/tree/main/contracts/tokens-manager)
+
+The cw20 tokens manager allow users to pay a `token_creation_fee` to mint cw20 tokens managed by this contract
+
+&nbsp;
+
+* [Token-Swap](https://github.com/ChihuahuaChain/Chiwawasm/tree/main/contracts/token-swap)
+
+A constant product (AMM) implementation that allows the trading of any `CW20` or `IBC` tokens quoted against the base token `HUAHUA`
 
 &nbsp;
 
