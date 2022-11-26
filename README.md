@@ -1,9 +1,5 @@
 # Chiwawasm Repo
 
-[![Rust](https://github.com/ChihuahuaChain/CosmWasm/actions/workflows/rust.yml/badge.svg)](https://github.com/ChihuahuaChain/CosmWasm/actions/workflows/rust.yml)
-
-&nbsp;
-
 This repo is a collection of smart contracts built with the
 [cosmwasm](https://github.com/CosmWasm/cosmwasm) framework.
 
