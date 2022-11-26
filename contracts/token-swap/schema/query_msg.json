@@ -3,28 +3,6 @@
   "title": "QueryMsg",
   "oneOf": [
     {
-      "description": "Implements CW20. Returns the current balance of the given address, 0 if unset.",
-      "type": "object",
-      "required": [
-        "balance"
-      ],
-      "properties": {
-        "balance": {
-          "type": "object",
-          "required": [
-            "address"
-          ],
-          "properties": {
-            "address": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Returns information about the current state of the pool",
       "type": "object",
       "required": [
         "info"

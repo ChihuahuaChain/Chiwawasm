@@ -12,9 +12,6 @@ pub enum ContractError {
     #[error("None Error")]
     NoneError {},
 
-    #[error("Unauthorized")]
-    Unauthorized {},
-
     #[error("Max quote token error: max_token: {max_quote_token_amount}, tokens_required: {required_quote_token_amount}")]
     MaxQuoteTokenAmountExceeded {
         max_quote_token_amount: Uint128,
@@ -53,12 +50,6 @@ pub enum ContractError {
 
     #[error("Non zero amount for base and quote tokens is expected")]
     NonZeroInputAmountExpected {},
-
-    #[error("Uknown reply id: {id}")]
-    UnknownReplyId { id: u64 },
-
-    #[error("Failed to instantiate lp token")]
-    InstantiateLpTokenError {},
 
     #[error("No native token provided in pair")]
     NativeTokenNotProvidedInPair {},

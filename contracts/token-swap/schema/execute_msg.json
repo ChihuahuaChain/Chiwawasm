@@ -155,7 +155,6 @@
       "additionalProperties": false
     },
     {
-      "description": "Chained swap converting A -> B and B -> C by leveraging two swap contracts",
       "type": "object",
       "required": [
         "pass_through_swap"
@@ -164,10 +163,9 @@
         "pass_through_swap": {
           "type": "object",
           "required": [
-            "input_token",
-            "input_token_amount",
+            "min_quote_output_amount",
             "output_amm_address",
-            "output_min_token"
+            "quote_input_amount"
           ],
           "properties": {
             "expiration": {
@@ -180,16 +178,13 @@
                 }
               ]
             },
-            "input_token": {
-              "$ref": "#/definitions/TokenSelect"
-            },
-            "input_token_amount": {
+            "min_quote_output_amount": {
               "$ref": "#/definitions/Uint128"
             },
             "output_amm_address": {
               "$ref": "#/definitions/Addr"
             },
-            "output_min_token": {
+            "quote_input_amount": {
               "$ref": "#/definitions/Uint128"
             }
           }

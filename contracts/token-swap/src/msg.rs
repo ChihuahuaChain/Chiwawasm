@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 // Native : IBC
 // Native : Cw20
 // Token pairings
-// Also the contract is currently constrained to the use of only HUAHUA as base
+// Also the contract is currently constrained to the use of only the protocol staking token as base
 // while any other token can be used as quote
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -56,14 +56,11 @@ pub enum ExecuteMsg {
         expiration: Option<Expiration>,
     },
 
-    // todo
-    /// Chained swap converting Q -> B and B -> Q' by leveraging two swap contracts
+    // Chained swap converting Q -> B and B -> Q' by leveraging two swap contracts
     PassThroughSwap {
-        // Q?
+        quote_input_amount: Uint128,
         output_amm_address: Addr,
-        input_token: TokenSelect,
-        input_token_amount: Uint128,
-        output_min_token: Uint128,
+        min_quote_output_amount: Uint128,
         expiration: Option<Expiration>,
     },
 }
@@ -71,10 +68,7 @@ pub enum ExecuteMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    /// Implements CW20. Returns the current balance of the given address, 0 if unset.
-    Balance { address: String },
-
-    /// Returns information about the current state of the pool
+    // Returns information about the current state of the pool
     Info {},
 }
 

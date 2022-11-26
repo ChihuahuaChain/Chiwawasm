@@ -7,7 +7,8 @@ mod tests {
 
     const USER: &str = "user";
     const NATIVE_DENOM: &str = "udenom";
-    const IBC_DENOM: &str = "ibc/denom";
+    const IBC_DENOM_1: &str = "ibc/denom1";
+    const IBC_DENOM_2: &str = "ibc/denom2";
     const SUPPLY: u128 = 500_000_000u128;
 
     fn mock_app() -> App {
@@ -23,7 +24,11 @@ mod tests {
                             amount: Uint128::from(SUPPLY),
                         },
                         Coin {
-                            denom: IBC_DENOM.to_string(),
+                            denom: IBC_DENOM_1.to_string(),
+                            amount: Uint128::from(SUPPLY),
+                        },
+                        Coin {
+                            denom: IBC_DENOM_2.to_string(),
                             amount: Uint128::from(SUPPLY),
                         },
                     ],
@@ -178,6 +183,9 @@ mod tests {
 
     #[test]
     fn test_add_liquidity_with_cw20_as_quote() {
+        // Step 1
+        // Setup the mock app
+        // ------------------------------------------------------------------------------
         let mut router = mock_app();
         let owner = Addr::unchecked(USER);
 
@@ -209,6 +217,10 @@ mod tests {
             .unwrap();
         assert_eq!(owner_balance, Uint128::new(5000));
 
+        // Step 2
+        // Add liquidity
+        // ------------------------------------------------------------------------------
+
         // increase the spending allowance of the amm_contract on the quote_token_contract
         let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
             spender: amm_addr.to_string(),
@@ -223,6 +235,10 @@ mod tests {
                 &[],
             )
             .unwrap();
+
+        // Step 3
+        // Test error messages
+        // ------------------------------------------------------------------------------
 
         // ContractError::MsgExpirationError {}
         let add_liquidity_msg = ExecuteMsg::AddLiquidity {
@@ -296,7 +312,10 @@ mod tests {
             )
             .unwrap_err();
 
+        // Step 4
         // Add initial liquidity happy path
+        // ------------------------------------------------------------------------------
+
         let add_liquidity_msg = ExecuteMsg::AddLiquidity {
             base_token_amount: Uint128::new(100),
             max_quote_token_amount: Uint128::new(100),
@@ -332,7 +351,10 @@ mod tests {
             .unwrap();
         assert_eq!(lp_balance, Uint128::new(100));
 
+        // Step 5
         // Top-up liquidity
+        // ------------------------------------------------------------------------------
+
         // increase the spending allowance of the amm_contract on the quote_token_contract
         let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
             spender: amm_addr.to_string(),
@@ -390,7 +412,7 @@ mod tests {
         let owner = Addr::unchecked(USER);
 
         // amm contract instance
-        let amm_addr = _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM.into());
+        let amm_addr = _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM_1.into());
 
         // ContractError::InsufficientFunds {}
         let add_liquidity_msg = ExecuteMsg::AddLiquidity {
@@ -409,7 +431,7 @@ mod tests {
                         amount: Uint128::new(100),
                     },
                     Coin {
-                        denom: IBC_DENOM.into(),
+                        denom: IBC_DENOM_1.into(),
                         amount: Uint128::new(99),
                     },
                 ],
@@ -434,7 +456,7 @@ mod tests {
                         amount: amount_to_add,
                     },
                     Coin {
-                        denom: IBC_DENOM.into(),
+                        denom: IBC_DENOM_1.into(),
                         amount: amount_to_add,
                     },
                 ],
@@ -446,7 +468,7 @@ mod tests {
         let balance = bank_balance(&mut router, &owner, NATIVE_DENOM.to_string());
         assert_eq!(balance.amount, Uint128::new(SUPPLY) - amount_to_add);
 
-        let balance = bank_balance(&mut router, &owner, IBC_DENOM.to_string());
+        let balance = bank_balance(&mut router, &owner, IBC_DENOM_1.to_string());
         assert_eq!(balance.amount, Uint128::new(SUPPLY) - amount_to_add);
 
         // Add liquidity with excess quote tokens sent to the contract
@@ -469,14 +491,14 @@ mod tests {
                         amount: amount_to_add,
                     },
                     Coin {
-                        denom: IBC_DENOM.into(),
+                        denom: IBC_DENOM_1.into(),
                         amount: amount_to_add + excess,
                     },
                 ],
             )
             .unwrap();
 
-        let balance = bank_balance(&mut router, &owner, IBC_DENOM.into());
+        let balance = bank_balance(&mut router, &owner, IBC_DENOM_1.into());
         assert_eq!(
             balance.amount,
             Uint128::new(SUPPLY) - (amount_to_add + amount_to_add)
@@ -724,7 +746,7 @@ mod tests {
         let owner = Addr::unchecked(USER);
 
         // amm contract instance
-        let amm_addr = _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM.into());
+        let amm_addr = _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM_1.into());
 
         // Query amm info
         let info = get_amm_contract_info(&mut router, &amm_addr);
@@ -750,7 +772,7 @@ mod tests {
                         amount: amount_to_add,
                     },
                     Coin {
-                        denom: IBC_DENOM.into(),
+                        denom: IBC_DENOM_1.into(),
                         amount: amount_to_add,
                     },
                 ],
@@ -788,7 +810,7 @@ mod tests {
             .unwrap();
         assert_eq!(lp_balance, amount_to_remove);
 
-        let balance = bank_balance(&mut router, &owner, IBC_DENOM.into());
+        let balance = bank_balance(&mut router, &owner, IBC_DENOM_1.into());
         assert_eq!(
             balance.amount,
             Uint128::new(SUPPLY) - amount_to_add + amount_to_remove
@@ -1067,7 +1089,7 @@ mod tests {
         let owner = Addr::unchecked(USER);
 
         // amm contract instance
-        let amm_addr = _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM.into());
+        let amm_addr = _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM_1.into());
 
         // Step 2
         // Add liquidity to the amm
@@ -1089,7 +1111,7 @@ mod tests {
                         amount: liquidity_added,
                     },
                     Coin {
-                        denom: IBC_DENOM.into(),
+                        denom: IBC_DENOM_1.into(),
                         amount: liquidity_added,
                     },
                 ],
@@ -1119,7 +1141,7 @@ mod tests {
             .unwrap();
 
         // Verify that quote_amount_receive was added to sender IBC_DENOM balance
-        let balance = bank_balance(&mut router, &owner, IBC_DENOM.into());
+        let balance = bank_balance(&mut router, &owner, IBC_DENOM_1.into());
         assert_eq!(
             balance.amount,
             Uint128::new(SUPPLY) - liquidity_added + quote_output_1
@@ -1152,7 +1174,7 @@ mod tests {
                     expiration: None,
                 },
                 &[Coin {
-                    denom: IBC_DENOM.into(),
+                    denom: IBC_DENOM_1.into(),
                     amount: max_quote_input_1,
                 }],
             )
@@ -1196,7 +1218,7 @@ mod tests {
                     expiration: None,
                 },
                 &[Coin {
-                    denom: IBC_DENOM.into(),
+                    denom: IBC_DENOM_1.into(),
                     amount: max_quote_input_2 + excess_quote_input,
                 }],
             )
@@ -1212,7 +1234,7 @@ mod tests {
         );
 
         // Verify that change was returned to sender IBC_DENOM balance
-        let balance = bank_balance(&mut router, &owner, IBC_DENOM.into());
+        let balance = bank_balance(&mut router, &owner, IBC_DENOM_1.into());
         assert_eq!(
             balance.amount,
             Uint128::new(SUPPLY) - liquidity_added + quote_output_1
@@ -1378,7 +1400,7 @@ mod tests {
         let recipient = Addr::unchecked("recipient");
 
         // amm contract instance
-        let amm_addr = _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM.into());
+        let amm_addr = _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM_1.into());
 
         // Step 2
         // Add liquidity to the amm
@@ -1400,7 +1422,7 @@ mod tests {
                         amount: liquidity_added,
                     },
                     Coin {
-                        denom: IBC_DENOM.into(),
+                        denom: IBC_DENOM_1.into(),
                         amount: liquidity_added,
                     },
                 ],
@@ -1431,7 +1453,525 @@ mod tests {
             .unwrap();
 
         // Verify that recipient got the output tokens
-        let balance = bank_balance(&mut router, &recipient, IBC_DENOM.to_string());
+        let balance = bank_balance(&mut router, &recipient, IBC_DENOM_1.to_string());
         assert_eq!(balance.amount, amount_to_output);
+    }
+
+    #[test]
+    fn test_pass_through_swap_in_cw20_out_cw20() {
+        // Step 1
+        // Setup the mock app
+        // Create two amm NATIVE_DENOM:CW20 contracts
+        // ------------------------------------------------------------------------------
+
+        let mut router = mock_app();
+        let owner = Addr::unchecked(USER);
+
+        // cw20 quote token1
+        let token1 = create_cw20_quote_token(
+            &mut router,
+            &owner,
+            "tokenone".to_string(),
+            "CWTOKENone".to_string(),
+            Uint128::new(200_000),
+        );
+
+        // cw20 quote token2
+        let token2 = create_cw20_quote_token(
+            &mut router,
+            &owner,
+            "tokentwo".to_string(),
+            "CWTOKENtwo".to_string(),
+            Uint128::new(200_000),
+        );
+
+        // amm contract instances
+        let native_to_token1_amm = _instantiate_amm_with_cw20_as_quote(&mut router, token1.addr());
+        let native_to_token2_amm = _instantiate_amm_with_cw20_as_quote(&mut router, token2.addr());
+
+        // make sure that token1 != token2
+        assert_ne!(token1.addr(), token2.addr());
+        // make sure that native_to_token1_amm != native_to_token2_amm
+        assert_ne!(native_to_token1_amm, native_to_token2_amm);
+
+        // Step 2
+        // Add liquidity to both amm pools
+        // ------------------------------------------------------------------------------
+
+        // increase the spending allowance of native_to_token1_amm on token1 contract
+        // on behalf of owner
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: native_to_token1_amm.to_string(),
+            amount: Uint128::new(100_000u128),
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(owner.clone(), token1.addr(), &allowance_msg, &[])
+            .unwrap();
+
+        // Add liquidity to native_to_token1_amm
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: Uint128::new(100_000),
+            max_quote_token_amount: Uint128::new(100_000),
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_token1_amm.clone(),
+                &add_liquidity_msg,
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: Uint128::new(100_000),
+                }],
+            )
+            .unwrap();
+
+        // increase the spending allowance of native_to_token2_amm on token2 contract
+        // on behalf of owner
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: native_to_token2_amm.to_string(),
+            amount: Uint128::new(100_000u128),
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(owner.clone(), token2.addr(), &allowance_msg, &[])
+            .unwrap();
+
+        // Add liquidity to native_to_token2_amm
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: Uint128::new(100_000),
+            max_quote_token_amount: Uint128::new(100_000),
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_token2_amm.clone(),
+                &add_liquidity_msg,
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: Uint128::new(100_000),
+                }],
+            )
+            .unwrap();
+
+        // Given the current state of the the amm_s
+        // When quote_input_amount = 10_000,  to native_to_token1_amm
+        // Calculate min_quote_output_amount from native_to_token2_amm when doing a PassThroughSwap
+        //
+        // To output the intemediary b from native_to_token1_amm , where B = 100_000 and Q = 100_000 and q = 10_000
+        // b = Bq / (Q + q)
+        // b = 100_000 * 10_000 / (100_000 + 10_000)
+        // b = 9090.9 - fees
+        // b = 9090.9 - (0.3% of 9090.9)
+        // b = 9090.9 - 27.2727 = 9063
+        //
+        // Now b becomes the base input to native_to_token2_amm
+        // To calculate min_quote_output_amount q, where b = 9063, B = 100_000 and Q = 100_000
+        // q = Qb / (B + b)
+        // q = 100_000 * 9063 / (100_000 + 9063)
+        // q = 8309.87594326 - fees
+        // q = 8309.87594326 - (0.3% of 8309.87594326)
+        // q = 8309.87594326 - 24.9296278298
+        // q = 8285
+
+        // Step 3
+        // Test error cases
+        // ------------------------------------------------------------------------------
+        // ContractError::MsgExpirationError {}
+        let min_quote_output_amount = Uint128::new(8285);
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_token1_amm.clone(),
+                &ExecuteMsg::PassThroughSwap {
+                    quote_input_amount: Uint128::new(10_000),
+                    output_amm_address: native_to_token2_amm.clone(),
+                    min_quote_output_amount,
+                    expiration: Some(Expiration::AtHeight(0)),
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        // Step 4
+        // do a pass through swap from native_to_token1_amm to native_to_token2_amm
+        // ------------------------------------------------------------------------------
+        // increase the spending allowance of native_to_token1_amm on token1 contract
+        // on behalf of owner
+        let token1_input = Uint128::new(10_000);
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: native_to_token1_amm.to_string(),
+            amount: token1_input,
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(owner.clone(), token1.addr(), &allowance_msg, &[])
+            .unwrap();
+
+        // Do pass through swap
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_token1_amm,
+                &ExecuteMsg::PassThroughSwap {
+                    quote_input_amount: Uint128::new(10_000),
+                    output_amm_address: native_to_token2_amm.clone(),
+                    min_quote_output_amount,
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap();
+
+        // verify that min_quote_output_amount went to owner's token2 cw20 address
+        let owner_token2_balance = token2
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(
+            owner_token2_balance,
+            Uint128::new(100_000) + min_quote_output_amount
+        );
+    }
+
+    #[test]
+    fn test_pass_through_swap_in_cw20_out_ibc() {
+        // Step 1
+        // Setup the mock app
+        // Create two amm contracts, NATIVE_DENOM:CW20 and NATIVE_DENOM:IBC_DENOM
+        // ------------------------------------------------------------------------------
+
+        let mut router = mock_app();
+        let owner = Addr::unchecked(USER);
+
+        // cw20 quote token1
+        let cw20_quote_token = create_cw20_quote_token(
+            &mut router,
+            &owner,
+            "tokenone".to_string(),
+            "CWTOKENone".to_string(),
+            Uint128::new(200_000),
+        );
+
+        // amm contract instances
+        let native_to_cw20_amm =
+            _instantiate_amm_with_cw20_as_quote(&mut router, cw20_quote_token.addr());
+        let native_to_ibc_amm =
+            _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM_1.into());
+
+        // make sure that native_to_cw20_amm != native_to_ibc_amm
+        assert_ne!(native_to_cw20_amm, native_to_ibc_amm);
+
+        // Step 2
+        // Add liquidity to both amm pools
+        // ------------------------------------------------------------------------------
+        // increase the spending allowance of native_to_cw20_amm on cw20_quote_token contract
+        // on behalf of owner
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: native_to_cw20_amm.to_string(),
+            amount: Uint128::new(100_000u128),
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(owner.clone(), cw20_quote_token.addr(), &allowance_msg, &[])
+            .unwrap();
+
+        // Add liquidity to native_to_cw20_amm
+        let liquidity_added = Uint128::new(100_000);
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: liquidity_added,
+            max_quote_token_amount: liquidity_added,
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_cw20_amm.clone(),
+                &add_liquidity_msg,
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: liquidity_added,
+                }],
+            )
+            .unwrap();
+
+        // Add liquidity to native_to_ibc_amm
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: liquidity_added,
+            max_quote_token_amount: liquidity_added,
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_ibc_amm.clone(),
+                &add_liquidity_msg,
+                &[
+                    Coin {
+                        denom: NATIVE_DENOM.into(),
+                        amount: liquidity_added,
+                    },
+                    Coin {
+                        denom: IBC_DENOM_1.into(),
+                        amount: liquidity_added,
+                    },
+                ],
+            )
+            .unwrap();
+
+        // Step 3
+        // do a pass through swap from native_to_cw20_amm to native_to_ibc_amm
+        // ------------------------------------------------------------------------------
+        // increase the spending allowance of native_to_cw20_amm on cw20_quote_token contract
+        // on behalf of owner
+        let quote_input = Uint128::new(10_000);
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: native_to_cw20_amm.to_string(),
+            amount: quote_input,
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(owner.clone(), cw20_quote_token.addr(), &allowance_msg, &[])
+            .unwrap();
+
+        // Do pass through swap
+        let min_quote_output_amount = Uint128::new(8285);
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_cw20_amm,
+                &ExecuteMsg::PassThroughSwap {
+                    quote_input_amount: Uint128::new(10_000),
+                    output_amm_address: native_to_ibc_amm.clone(),
+                    min_quote_output_amount,
+                    expiration: None,
+                },
+                &[],
+            )
+            .unwrap();
+
+        // verify that min_quote_output_amount was added to owners IBC_DENOM balance
+        let balance = bank_balance(&mut router, &owner, IBC_DENOM_1.to_string());
+        assert_eq!(
+            balance.amount,
+            Uint128::new(SUPPLY) - liquidity_added + min_quote_output_amount
+        );
+    }
+
+    #[test]
+    fn test_pass_through_swap_in_ibc_out_cw20() {
+        // Step 1
+        // Setup the mock app
+        // Create two amm contracts, NATIVE_DENOM:IBC_DENOM and NATIVE_DENOM:CW20
+        // ------------------------------------------------------------------------------
+
+        let mut router = mock_app();
+        let owner = Addr::unchecked(USER);
+
+        // cw20 quote token1
+        let cw20_quote_token = create_cw20_quote_token(
+            &mut router,
+            &owner,
+            "tokenone".to_string(),
+            "CWTOKENone".to_string(),
+            Uint128::new(200_000),
+        );
+
+        // amm contract instances
+        let native_to_cw20_amm =
+            _instantiate_amm_with_cw20_as_quote(&mut router, cw20_quote_token.addr());
+        let native_to_ibc_amm =
+            _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM_1.into());
+
+        // make sure that native_to_cw20_amm != native_to_ibc_amm
+        assert_ne!(native_to_cw20_amm, native_to_ibc_amm);
+
+        // Step 2
+        // Add liquidity to both amm pools
+        // ------------------------------------------------------------------------------
+
+        // increase the spending allowance of native_to_cw20_amm on cw20_quote_token contract
+        // on behalf of owner
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: native_to_cw20_amm.to_string(),
+            amount: Uint128::new(100_000u128),
+            expires: None,
+        };
+        let _res = router
+            .execute_contract(owner.clone(), cw20_quote_token.addr(), &allowance_msg, &[])
+            .unwrap();
+
+        // Add liquidity to native_to_cw20_amm
+        let liquidity_added = Uint128::new(100_000);
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: liquidity_added,
+            max_quote_token_amount: liquidity_added,
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_cw20_amm.clone(),
+                &add_liquidity_msg,
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: liquidity_added,
+                }],
+            )
+            .unwrap();
+
+        // Add liquidity to native_to_ibc_amm
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: liquidity_added,
+            max_quote_token_amount: liquidity_added,
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_ibc_amm.clone(),
+                &add_liquidity_msg,
+                &[
+                    Coin {
+                        denom: NATIVE_DENOM.into(),
+                        amount: liquidity_added,
+                    },
+                    Coin {
+                        denom: IBC_DENOM_1.into(),
+                        amount: liquidity_added,
+                    },
+                ],
+            )
+            .unwrap();
+
+        // Step 3
+        // do a pass through swap from native_to_ibc_amm to native_to_cw20_amm
+        // ------------------------------------------------------------------------------
+        // Do pass through swap
+        let min_quote_output_amount = Uint128::new(8285);
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_ibc_amm,
+                &ExecuteMsg::PassThroughSwap {
+                    quote_input_amount: Uint128::new(10_000),
+                    output_amm_address: native_to_cw20_amm.clone(),
+                    min_quote_output_amount,
+                    expiration: None,
+                },
+                &[Coin {
+                    denom: IBC_DENOM_1.into(),
+                    amount: Uint128::new(10_000),
+                }],
+            )
+            .unwrap();
+
+        // verify that min_quote_output_amount went to owner's address on cw20_quote_token
+        let owner_cw20_quote_token = cw20_quote_token
+            .balance::<_, _, Empty>(&router, owner.clone())
+            .unwrap();
+        assert_eq!(
+            owner_cw20_quote_token,
+            Uint128::new(100_000) + min_quote_output_amount
+        );
+    }
+
+    #[test]
+    fn test_pass_through_swap_in_ibc_out_ibc() {
+        // Step 1
+        // Setup the mock app
+        // Create two amm contracts, NATIVE_DENOM:IBC_DENOM and NATIVE_DENOM:IBC_DENOM
+        // ------------------------------------------------------------------------------
+        let mut router = mock_app();
+        let owner = Addr::unchecked(USER);
+
+        // amm contract instances
+        let native_to_ibc_denom_1_amm =
+            _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM_1.into());
+        let native_to_ibc_denom_2_amm =
+            _instantiate_amm_with_native_as_quote(&mut router, IBC_DENOM_2.into());
+
+        // make sure that native_to_cw20_amm != native_to_ibc_amm
+        assert_ne!(native_to_ibc_denom_1_amm, native_to_ibc_denom_2_amm);
+
+        // Step 2
+        // Add liquidity to both amm pools
+        // ------------------------------------------------------------------------------
+        let liquidity_added = Uint128::new(100_000);
+
+        // Add liquidity to native_to_ibc_denom_1_amm
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: liquidity_added,
+            max_quote_token_amount: liquidity_added,
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_ibc_denom_1_amm.clone(),
+                &add_liquidity_msg,
+                &[
+                    Coin {
+                        denom: NATIVE_DENOM.into(),
+                        amount: liquidity_added,
+                    },
+                    Coin {
+                        denom: IBC_DENOM_1.into(),
+                        amount: liquidity_added,
+                    },
+                ],
+            )
+            .unwrap();
+
+        // Add liquidity to native_to_ibc_denom_2_amm
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: liquidity_added,
+            max_quote_token_amount: liquidity_added,
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_ibc_denom_2_amm.clone(),
+                &add_liquidity_msg,
+                &[
+                    Coin {
+                        denom: NATIVE_DENOM.into(),
+                        amount: liquidity_added,
+                    },
+                    Coin {
+                        denom: IBC_DENOM_2.into(),
+                        amount: liquidity_added,
+                    },
+                ],
+            )
+            .unwrap();
+
+        // Do pass through swap
+        let min_quote_output_amount = Uint128::new(8285);
+        router
+            .execute_contract(
+                owner.clone(),
+                native_to_ibc_denom_1_amm,
+                &ExecuteMsg::PassThroughSwap {
+                    quote_input_amount: Uint128::new(10_000),
+                    output_amm_address: native_to_ibc_denom_2_amm.clone(),
+                    min_quote_output_amount,
+                    expiration: None,
+                },
+                &[Coin {
+                    denom: IBC_DENOM_1.into(),
+                    amount: Uint128::new(10_000),
+                }],
+            )
+            .unwrap();
+
+        // verify that min_quote_output_amount was added to owners IBC_DENOM balance
+        let balance = bank_balance(&mut router, &owner, IBC_DENOM_2.to_string());
+        assert_eq!(
+            balance.amount,
+            Uint128::new(SUPPLY) - liquidity_added + min_quote_output_amount
+        );
     }
 }

@@ -199,18 +199,16 @@ pub fn execute(
         ),
         ExecuteMsg::PassThroughSwap {
             output_amm_address,
-            input_token,
-            input_token_amount,
-            output_min_token,
+            quote_input_amount,
+            min_quote_output_amount,
             expiration,
         } => execute_pass_through_swap(
             deps,
             info,
             env,
+            quote_input_amount,
             output_amm_address,
-            input_token,
-            input_token_amount,
-            output_min_token,
+            min_quote_output_amount,
             expiration,
         ),
     }
@@ -654,18 +652,9 @@ pub fn execute_swap(
     // Create SDK messages holder
     let mut sdk_msgs = vec![];
 
-    // Here we get the native_denom
-    let native_denom_enum = NATIVE_DENOM.load(deps.storage)?;
-    let native_denom = match native_denom_enum.clone() {
-        Denom::Native(native_denom) => native_denom,
-        Denom::Cw20(_) => {
-            // this will never be called because we already ensured
-            // that the native_denom_enum is always native
-            return Err(ContractError::NoneError {});
-        }
-    };
-
     // Update reserves and sdk messages for the input token
+    let native_denom = get_native_denom_str(&deps)?;
+
     match swap_price.input.denom.clone() {
         Denom::Native(input_denom) => {
             match input_denom == native_denom {
@@ -883,26 +872,134 @@ pub fn exact_output_variable_input(
     })
 }
 
+fn get_native_denom_str(deps: &DepsMut) -> Result<String, ContractError> {
+    let native_denom_enum = NATIVE_DENOM.load(deps.storage)?;
+
+    Ok(match native_denom_enum.clone() {
+        Denom::Native(native_denom) => native_denom,
+        Denom::Cw20(_) => {
+            // this will never be called because we already ensured
+            // that the native_denom_enum is always native
+            return Err(ContractError::NoneError {});
+        }
+    })
+}
+
 pub fn execute_pass_through_swap(
     deps: DepsMut,
     info: MessageInfo,
     _env: Env,
+    quote_input_amount: Uint128,
     output_amm_address: Addr,
-    input_token_enum: TokenSelect,
-    input_token_amount: Uint128,
-    output_min_token: Uint128,
+    min_quote_output_amount: Uint128,
     expiration: Option<Expiration>,
 ) -> Result<Response, ContractError> {
-    // todo implement this
-    Ok(Response::new())
+    check_expiration(&expiration, &_env.block)?;
+
+    // here we load the token reserves
+    let base = BASE_TOKEN.load(deps.storage)?;
+    let quote = QUOTE_TOKEN.load(deps.storage)?;
+
+    /*
+     * To output b and input q, we use
+     * (B - b) * (Q + q) = k, where k = B * Q
+     *
+     * Differentiate for variable output b
+     *
+     * (Q + q) = k / (B - b)
+     * (Q + q) = B * Q / (B - b)
+     * (B - b) =  B * Q / (Q + q)
+     * b = B - (B * Q) / (Q + q)
+     *
+     * Multiplying both sides by  (Q + q)
+     * b (Q + q) = B (Q + q) - (B * Q)
+     * b (Q + q) = BQ + Bq - BQ
+     *
+     * b = Bq / (Q + q)
+     *
+     * Note: because we are outputing a variable amount of base token from this first swap,
+     * The swap fees is deducted from the output
+     */
+    let numerator = base
+        .reserve
+        .checked_mul(quote_input_amount)
+        .map_err(StdError::overflow)?;
+
+    let denominator = quote
+        .reserve
+        .checked_add(quote_input_amount)
+        .map_err(StdError::overflow)?;
+
+    let calculated_base_output = numerator
+        .checked_div(denominator)
+        .map_err(StdError::divide_by_zero)?;
+
+    // Deduct swap_fee from the calculated_base_output
+    let swap_fee = get_swap_fee(calculated_base_output)?;
+    let calculated_base_output = calculated_base_output
+        .checked_sub(swap_fee)
+        .map_err(StdError::overflow)?;
+
+    // Update reserves
+    BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
+        base.reserve -= calculated_base_output;
+        Ok(base)
+    })?;
+
+    QUOTE_TOKEN.update(deps.storage, |mut quote| -> Result<_, ContractError> {
+        quote.reserve += quote_input_amount;
+        Ok(quote)
+    })?;
+
+    // Create SDK messages holder
+    let mut sdk_msgs = vec![];
+
+    match quote.denom.clone() {
+        // Add message to transfer quote_input_amount to this amm address
+        Denom::Cw20(addr) => {
+            sdk_msgs.push(get_cw20_transfer_from_msg(
+                &info.sender,
+                &_env.contract.address,
+                &addr,
+                quote_input_amount,
+            )?);
+        }
+
+        // verify that the correct quote tokens was sent in the contract call
+        Denom::Native(denom) => {
+            validate_native_amount(&info.funds, quote_input_amount, &denom)?;
+        }
+    }
+
+    // Add the message to do a SwapAndSendTo from the output_amm_address
+    // where output goes to info.sender
+    sdk_msgs.push(
+        WasmMsg::Execute {
+            contract_addr: output_amm_address.into(),
+            msg: to_binary(&ExecuteMsg::SwapAndSendTo {
+                input_token: TokenSelect::Base,
+                input_amount: calculated_base_output,
+                output_amount: min_quote_output_amount,
+                recipient: info.sender,
+                expiration,
+            })?,
+            funds: vec![Coin {
+                denom: get_native_denom_str(&deps)?,
+                amount: calculated_base_output,
+            }],
+        }
+        .into(),
+    );
+
+    Ok(Response::new().add_messages(sdk_msgs).add_attributes(vec![
+        attr("input_token_amount", quote_input_amount),
+        attr("native_transferred", calculated_base_output),
+    ]))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Balance { address } => {
-            to_binary(&cw20_base::contract::query_balance(deps, address)?)
-        }
         QueryMsg::Info {} => to_binary(&query_info(deps)?),
     }
 }

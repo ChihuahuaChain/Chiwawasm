@@ -105,13 +105,17 @@ price_impact = pool_price_after - pool_price_before , where pool_price = Q/B
 
 &nbsp;
 
-## WIP: How to test?
+## How to test
+
+See Developing.md
 
 &nbsp;
 
 ## Future upgrades
 
-IBC assets liquidity pools. 
+Add support for stable swap
+
+Add support for ranged liquidity pooling
 
 &nbsp;
 
