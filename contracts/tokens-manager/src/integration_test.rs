@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use crate::helpers::CwTemplateContract;
     use crate::msg::{
         ExecuteMsg, InstantiateMsg, MarketingInfo, QueryMsg, TokenInfo, TokenListResponse,
     };
-    use crate::state::{Config, Entry};
+    use crate::state::Entry;
 
     use cosmwasm_std::{coins, Addr, Coin, Empty, Uint128};
     use cw20::Logo;
@@ -17,7 +16,6 @@ mod tests {
     // Here we create a struct for instatation config
     struct InstantiationResponse {
         app: App,
-        c_template: CwTemplateContract,
         c_addr: Addr,
         msg: InstantiateMsg,
     }
@@ -104,13 +102,10 @@ mod tests {
             )
             .unwrap();
 
-        let cw_template_contract = CwTemplateContract(template_contract_addr.clone());
-
         // return resuable data
         InstantiationResponse {
             app,
             msg,
-            c_template: cw_template_contract,
             c_addr: template_contract_addr,
         }
     }

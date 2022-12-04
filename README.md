@@ -33,7 +33,7 @@ A constant product (AMM) implementation that allows the trading of any `CW20` or
 
 Before you merge the code, make sure it builds and passes all tests using the command below.
 
-`./devtools/build_test_all.sh`
+`cargo test`
 
 &nbsp;
 
@@ -45,7 +45,7 @@ optimized build for each contract and saves them to the `./artifacts` directory:
 `docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/rust-optimizer:0.12.6 ./contracts/*/`
+  cosmwasm/rust-optimizer:0.12.6`
 
 &nbsp;
 
@@ -79,9 +79,9 @@ optimized build for each contract and saves them to the `./artifacts` directory:
 
 `$ source ~/.profile`
 
-`$ export CHAIN_ID="chitestnet-1"`
+`$ export CHAIN_ID="chitestnet-5"`
 
-`$ export RPC="<rpc_endpoint>"`
+`$ export RPC="https://chihuahua-testnet-rpc.polkachu.com:443"`
 
 `$ export NODE=(--node $RPC)`
 

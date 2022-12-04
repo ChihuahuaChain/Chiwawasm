@@ -1,6 +1,4 @@
-# Details
-
-## CPAMM (Constant Product Automated Market Maker)
+# HuaHuaSwap CPAMM (Constant Product Automated Market Maker)
 
 One such rule is the constant product formula B * Q = k, where B and Q are the reserves of the Base(B) and Quote(Q) token pair.
 
@@ -12,10 +10,10 @@ In order to withdraw some amount of Base tokens, one must deposit a proportional
 
 f(B, Q) = sqrt(B * Q) = sqrt(k) => T
 
-Why are we using the square_root of k 
+Why are we using the square_root of k
 instead of just randomly choosing one of the numbers as the initial LP shares?
 
-f(B, Q) is quadratic, meaning the bigger B and Q are the larger the output, f(B, Q) should be linear.
+f(B, Q) is quadratic, meaning the bigger B and Q are, the larger the output; f(B, Q) should be linear.
 
 &nbsp;
 
