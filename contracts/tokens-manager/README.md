@@ -45,8 +45,6 @@ pub struct TokenListResponse {
 
 ## How to test
 
----
-
 ### Build contract from source
 
 `$ docker run --rm -v "$(pwd)":/code \
@@ -62,13 +60,13 @@ pub struct TokenListResponse {
 
 `$ echo $RES`
 
-`$ export CODE_ID=$(echo $RES | jq -r '.logs[0].events[-1].attributes[0].value')`
+`$ export CODE_ID=$(echo $RES | jq -r '.logs[0].events[-1].attributes[1].value')`
 
 `echo $CODE_ID`
 
 &nbsp;
 
-### TODO Instantiate the contract
+### Instantiate the contract
 
 #### Prepare the json message payload
 
@@ -85,7 +83,7 @@ let init_msg = JSON.stringify({
 export INIT='<init_msg>'
 
 
-$ chihuahuad tx wasm instantiate $CODE_ID "$INIT" --from <account_name> --label "BURN TEST CONTRACT" $TXFLAG -y --no-admin
+$ chihuahuad tx wasm instantiate $CODE_ID "$INIT" --from <account_name> --label "Tokens Manager" $TXFLAG -y --no-admin
 ```
 
 &nbsp;
@@ -142,7 +140,7 @@ let init_msg = JSON.stringify(
 
 export E_PAYLOAD='<init_msg>'
 
-$ chihuahuad tx wasm execute $CONTRACT "$E_PAYLOAD" --from cryptoql --amount=10000000000stake $NODE $TXFLAG -y
+$ chihuahuad tx wasm execute $CONTRACT "$E_PAYLOAD" --from <account_name> --amount=10000000000stake $NODE $TXFLAG -y
 ```
 
 &nbsp;

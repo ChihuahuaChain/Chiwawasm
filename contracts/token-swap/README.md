@@ -105,7 +105,7 @@ price_impact = pool_price_after - pool_price_before , where pool_price = Q/B
 
 ## How to test
 
-See Developing.md
+See [TESTNET.md](https://github.com/ChihuahuaChain/Chiwawasm/blob/main/contracts/token-swap/TESTNET.md)
 
 &nbsp;
 

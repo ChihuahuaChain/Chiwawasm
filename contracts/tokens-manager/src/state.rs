@@ -45,8 +45,8 @@ impl IndexList<Entry> for EntryIndexes<'_> {
 // Here we create a unique IndexedMap whose default maps from symbol to Entry
 pub fn entries<'a>() -> IndexedMap<'a, &'a str, Entry, EntryIndexes<'a>> {
     let indexes = EntryIndexes {
-        id: UniqueIndex::new(|e| e.id, "ENTRY_ID"),
-        name: UniqueIndex::new(|e| e.name.clone(), "ENTRY_NAME"),
+        id: UniqueIndex::new(|e| e.id, "ENTRIES_BY_ID"),
+        name: UniqueIndex::new(|e| e.name.clone(), "ENTRIES_BY_NAME"),
     };
 
     IndexedMap::new("ENTRY_LIST", indexes)

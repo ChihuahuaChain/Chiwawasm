@@ -41,7 +41,7 @@ A constant product (AMM) implementation that allows the trading of any `CW20` or
 
 Before you merge the code, make sure it builds and passes all tests using the command below.
 
-`cargo test`
+`$ cargo test`
 
 &nbsp;
 
@@ -51,7 +51,7 @@ You can build release artifacts manually like this, which creates a reproducible
 optimized build for each contract and saves them to the `./artifacts` directory:
 
 ```zsh
-docker run --rm -v "$(pwd)":/code \
+$ docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
   cosmwasm/rust-optimizer:0.12.6
@@ -60,7 +60,7 @@ docker run --rm -v "$(pwd)":/code \
 &nbsp;
 
 
-## Chihuahuad: Working with smart contracts
+## Working with smart contracts (chihuahuad)
 
 (See [instructions](https://github.com/ChihuahuaChain/chihuahua/blob/main/README.md) on how install `chihuahuad`)
 
@@ -77,9 +77,9 @@ $ open ~/.chihuahua/config/config.toml
 ### Generate a new cosm-wasm project from template
 
 ```zsh
-cargo install cargo-generate --features vendored-openssl
+$ cargo install cargo-generate --features vendored-openssl
 
-cargo generate --git <https://github.com/CosmWasm/cosmwasm-template.git> --name my-first-contract
+$ cargo generate --git <https://github.com/CosmWasm/cosmwasm-template.git> --name my-first-contract
 ```
 &nbsp;
 
@@ -110,17 +110,17 @@ $ chihuahuad keys list
 ### Export variables for use in terminal (zsh)
 
 ```zsh
-source ~/.profile
+$ source ~/.profile
 
-export CHAIN_ID="chitestnet-5"
+$ export CHAIN_ID="chitestnet-5"
 
-export RPC="https://chihuahua-testnet-rpc.polkachu.com:443"
+$ export RPC="https://chihuahua-testnet-rpc.polkachu.com:443"
 
-export NODE=(--node $RPC)
+$ export NODE=(--node $RPC)
 
-export TXFLAG=($NODE --chain-id $CHAIN_ID --gas-prices 0.25stake --gas auto --gas-adjustment 1.3)
+$ export TXFLAG=($NODE --chain-id $CHAIN_ID --gas-prices 0.25stake --gas auto --gas-adjustment 1.3)
 
-export TXFLAG_LOCAL=(--gas-prices 0.25stake --gas auto --gas-adjustment 1.3 --keyring-backend test)
+$ export TXFLAG_LOCAL=(--gas-prices 0.25stake --gas auto --gas-adjustment 1.3 --keyring-backend test)
 ```
 
 &nbsp;
@@ -155,13 +155,11 @@ $ chihuahuad query wasm list-code $NODE
 ### Store the contract on the blockchain and get the <CODE_ID>
 
 ```zsh
-export RES=$(chihuahuad tx wasm store artifacts/<contract_name.wasm> --from <account_name> $TXFLAG -y --output json -b block)
+$ export RES=$(chihuahuad tx wasm store artifacts/<contract_name.wasm> --from <account_name> $TXFLAG -y --output json -b block)
 
-echo $RES
+$ export CODE_ID=$(echo $RES | jq -r '.logs[0].events[-1].attributes[0].value')
 
-export CODE_ID=$(echo $RES | jq -r '.logs[0].events[-1].attributes[0].value')
-
-echo $CODE_ID
+$ echo $CODE_ID
 ```
 
 &nbsp;
@@ -249,16 +247,3 @@ $ export Q_PAYLOAD='{"query_list":{}}'
 
 $ chihuahuad query wasm contract-state smart $CONTRACT "$Q_PAYLOAD" $NODE --output json
 ```
-
-&nbsp;
-
-### If you prefer to work in a NodeJs environment, run the following command to start the node REPL this is complete with cosmos sdk interactions
-
-```zsh
-npx @cosmjs/cli@^0.28.1 --init <https://raw.githubusercontent.com/InterWasm/cw-plus-helpers/main/base.ts> --init <https://raw.githubusercontent.com/InterWasm/cw-plus-helpers/main/cw20-base.ts>
-<https://docs.cosmwasm.com/docs/1.0/getting-started/interact-with-contract>
-```
-
-&nbsp;
-
-### [Check here for more info on @cosmjs/cli](https://www.npmjs.com/package/@cosmjs/cli)

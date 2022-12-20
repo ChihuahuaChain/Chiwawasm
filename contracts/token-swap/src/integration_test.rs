@@ -222,6 +222,7 @@ mod tests {
         // ------------------------------------------------------------------------------
 
         // increase the spending allowance of the amm_contract on the quote_token_contract
+        // on behalf of owner
         let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
             spender: amm_addr.to_string(),
             amount: Uint128::new(100u128),
@@ -315,7 +316,6 @@ mod tests {
         // Step 4
         // Add initial liquidity happy path
         // ------------------------------------------------------------------------------
-
         let add_liquidity_msg = ExecuteMsg::AddLiquidity {
             base_token_amount: Uint128::new(100),
             max_quote_token_amount: Uint128::new(100),
@@ -1557,10 +1557,10 @@ mod tests {
             .unwrap();
 
         // Given the current state of the the amm_s
-        // When quote_input_amount = 10_000,  to native_to_token1_amm
+        // When quote_input_amount  to native_to_token1_amm = 10_000
         // Calculate min_quote_output_amount from native_to_token2_amm when doing a PassThroughSwap
         //
-        // To output the intemediary b from native_to_token1_amm , where B = 100_000 and Q = 100_000 and q = 10_000
+        // To output the intermediate token b from native_to_token1_amm , where B = 100_000 and Q = 100_000 and q = 10_000
         // b = Bq / (Q + q)
         // b = 100_000 * 10_000 / (100_000 + 10_000)
         // b = 9090.9 - fees

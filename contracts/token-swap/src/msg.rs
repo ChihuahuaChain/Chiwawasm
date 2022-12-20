@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 // while any other token can be used as quote
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    // {"native":"udenom"} or {"cw20":"addr"}
     pub native_denom: Denom,
     pub base_denom: Denom,
     pub quote_denom: Denom,

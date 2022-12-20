@@ -56,8 +56,6 @@ pub struct BalanceResponse {
 
 ## How to test
 
----
-
 ### Build contract from source
 
 `$ docker run --rm -v "$(pwd)":/code \

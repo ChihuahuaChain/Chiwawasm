@@ -45,8 +45,8 @@ pub enum ContractError {
     #[error("MsgExpirationError")]
     MsgExpirationError {},
 
-    #[error("InsufficientFunds")]
-    InsufficientFunds {},
+    #[error("IncorrectAmountProvided")]
+    IncorrectAmountProvided { provided: Uint128, required: Uint128},
 
     #[error("Non zero amount for base and quote tokens is expected")]
     NonZeroInputAmountExpected {},

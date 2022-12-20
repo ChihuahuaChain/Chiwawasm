@@ -101,7 +101,7 @@ pub fn instantiate(
 
 /**
  * Handle reply for contract instantiation
- * Get the contract address and save as P_TOKEN
+ * Get the contract address and save as LP_TOKEN
  *
  * @return the token_contract_addr as an attribute on success
  */
@@ -125,7 +125,7 @@ fn handle_instantiate_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
     // Validate contract address
     let cw20_addr = deps.api.addr_validate(&data.contract_address)?;
 
-    // Save gov token
+    // Save lp token
     LP_TOKEN.save(deps.storage, &cw20_addr)?;
 
     Ok(Response::new().add_attribute("token_contract_addr", data.contract_address))
@@ -180,7 +180,6 @@ pub fn execute(
             &info.sender,
             expiration,
         ),
-
         ExecuteMsg::SwapAndSendTo {
             input_token,
             input_amount,
@@ -240,7 +239,7 @@ fn get_amount_for_denom(coins: &[Coin], denom: &str) -> Coin {
     }
 }
 
-fn validate_native_amount(
+fn validate_exact_native_amount(
     coins: &[Coin],
     given_amount: Uint128,
     denom_str: &str,
@@ -248,7 +247,10 @@ fn validate_native_amount(
     let actual = get_amount_for_denom(coins, denom_str);
 
     if actual.amount != given_amount {
-        return Err(ContractError::InsufficientFunds {});
+        return Err(ContractError::IncorrectAmountProvided {
+            provided: actual.amount,
+            required: given_amount,
+        });
     }
 
     Ok(())
@@ -407,13 +409,13 @@ pub fn execute_add_liquidity(
     // Validate the input for the base_token_amount to know if the user
     // sent the exact amount and denom in the contract call
     if let Denom::Native(denom) = base.denom {
-        validate_native_amount(&info.funds, base_token_amount, &denom)?;
+        validate_exact_native_amount(&info.funds, base_token_amount, &denom)?;
     }
 
     // If the quote token is Native, validate the input for max_quote_token_amount
     // to know if the user sent the exact amount and denom in the contract call
     if let Denom::Native(denom) = quote.denom.clone() {
-        validate_native_amount(&info.funds, max_quote_token_amount, &denom)?;
+        validate_exact_native_amount(&info.funds, max_quote_token_amount, &denom)?;
     }
 
     // Calculate how much lp tokens to mint
@@ -518,6 +520,7 @@ pub fn execute_remove_liquidity(
         .map_err(StdError::overflow)?
         .checked_div(lp_token_supply)
         .map_err(StdError::divide_by_zero)?;
+
     if base_amount_to_output < min_base_token_output {
         return Err(ContractError::MinBaseTokenOutputError {
             requested: min_base_token_output,
@@ -659,7 +662,11 @@ pub fn execute_swap(
         Denom::Native(input_denom) => {
             match input_denom == native_denom {
                 true => {
-                    validate_native_amount(&info.funds, swap_price.input.amount, &input_denom)?;
+                    validate_exact_native_amount(
+                        &info.funds,
+                        swap_price.input.amount,
+                        &input_denom,
+                    )?;
 
                     BASE_TOKEN.update(deps.storage, |mut base| -> Result<_, ContractError> {
                         base.reserve += swap_price.input.amount;
@@ -667,7 +674,7 @@ pub fn execute_swap(
                     })?;
                 }
                 false => {
-                    validate_native_amount(&info.funds, input_amount, &input_denom)?;
+                    validate_exact_native_amount(&info.funds, input_amount, &input_denom)?;
 
                     // Return change if input_amount > swap_price.input.amount
                     if input_amount > swap_price.input.amount {
@@ -967,7 +974,7 @@ pub fn execute_pass_through_swap(
 
         // verify that the correct quote tokens was sent in the contract call
         Denom::Native(denom) => {
-            validate_native_amount(&info.funds, quote_input_amount, &denom)?;
+            validate_exact_native_amount(&info.funds, quote_input_amount, &denom)?;
         }
     }
 
