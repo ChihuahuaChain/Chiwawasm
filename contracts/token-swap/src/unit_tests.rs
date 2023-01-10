@@ -191,15 +191,17 @@ mod tests {
     fn test_get_required_quote_token_amount() {
         let liquidity = get_required_quote_token_amount(
             Uint128::new(100),
+            Uint128::new(50),
             Uint128::zero(),
             Uint128::zero(),
             Uint128::zero(),
         )
         .unwrap();
-        assert_eq!(liquidity, Uint128::new(100));
+        assert_eq!(liquidity, Uint128::new(50));
 
         let liquidity = get_required_quote_token_amount(
             Uint128::new(200),
+            Uint128::new(50),
             Uint128::new(100),
             Uint128::new(100),
             Uint128::new(100),

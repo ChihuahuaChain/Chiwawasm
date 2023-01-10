@@ -291,12 +291,13 @@ pub fn get_lp_token_amount_to_mint(
 
 pub fn get_required_quote_token_amount(
     base_token_amount: Uint128,
+    quote_token_amount: Uint128,
     liquidity_supply: Uint128,
     quote_reserve: Uint128,
     base_reserve: Uint128,
 ) -> Result<Uint128, StdError> {
     if liquidity_supply == Uint128::zero() {
-        Ok(base_token_amount)
+        Ok(quote_token_amount)
     } else {
         Ok(base_token_amount
             .checked_mul(quote_reserve)
@@ -426,6 +427,7 @@ pub fn execute_add_liquidity(
     // Calculate the required_quote_token_amount
     let required_quote_token_amount = get_required_quote_token_amount(
         base_token_amount,
+        max_quote_token_amount,
         lp_token_supply,
         quote.reserve,
         base.reserve,

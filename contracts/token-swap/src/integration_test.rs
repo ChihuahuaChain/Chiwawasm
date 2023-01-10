@@ -295,30 +295,12 @@ mod tests {
             )
             .unwrap_err();
 
-        // ContractError::MaxQuoteTokenAmountExceeded {}
-        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
-            base_token_amount: Uint128::new(100),
-            max_quote_token_amount: Uint128::new(80),
-            expiration: None,
-        };
-        router
-            .execute_contract(
-                owner.clone(),
-                amm_addr.clone(),
-                &add_liquidity_msg,
-                &[Coin {
-                    denom: NATIVE_DENOM.into(),
-                    amount: Uint128::new(100),
-                }],
-            )
-            .unwrap_err();
-
         // Step 4
         // Add initial liquidity happy path
         // ------------------------------------------------------------------------------
         let add_liquidity_msg = ExecuteMsg::AddLiquidity {
             base_token_amount: Uint128::new(100),
-            max_quote_token_amount: Uint128::new(100),
+            max_quote_token_amount: Uint128::new(80),
             expiration: None,
         };
         router
@@ -337,13 +319,13 @@ mod tests {
         let owner_balance = quote_token_contract
             .balance::<_, _, Empty>(&router, owner.clone())
             .unwrap();
-        assert_eq!(owner_balance, Uint128::new(4900));
+        assert_eq!(owner_balance, Uint128::new(4920));
 
         // check that the amm address on the cw20 quote token contract has the correct amount of quote tokens
         let amm_balance = quote_token_contract
             .balance::<_, _, Empty>(&router, amm_addr.clone())
             .unwrap();
-        assert_eq!(amm_balance, Uint128::new(100));
+        assert_eq!(amm_balance, Uint128::new(80));
 
         // check that the lp token contract has the correct lp tokens minted for the owner that added the liquidity
         let lp_balance = lp_token
@@ -355,10 +337,28 @@ mod tests {
         // Top-up liquidity
         // ------------------------------------------------------------------------------
 
+        // Test ContractError::MaxQuoteTokenAmountExceeded {}
+        let add_liquidity_msg = ExecuteMsg::AddLiquidity {
+            base_token_amount: Uint128::new(100),
+            max_quote_token_amount: Uint128::new(75),
+            expiration: None,
+        };
+        router
+            .execute_contract(
+                owner.clone(),
+                amm_addr.clone(),
+                &add_liquidity_msg,
+                &[Coin {
+                    denom: NATIVE_DENOM.into(),
+                    amount: Uint128::new(100),
+                }],
+            )
+            .unwrap_err();
+
         // increase the spending allowance of the amm_contract on the quote_token_contract
         let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
             spender: amm_addr.to_string(),
-            amount: Uint128::new(50u128),
+            amount: Uint128::new(40u128),
             expires: None,
         };
         let _res = router
@@ -372,7 +372,7 @@ mod tests {
 
         let add_liquidity_msg = ExecuteMsg::AddLiquidity {
             base_token_amount: Uint128::new(50),
-            max_quote_token_amount: Uint128::new(50),
+            max_quote_token_amount: Uint128::new(40),
             expiration: None,
         };
         router
@@ -391,13 +391,13 @@ mod tests {
         let owner_balance = quote_token_contract
             .balance::<_, _, Empty>(&router, owner.clone())
             .unwrap();
-        assert_eq!(owner_balance, Uint128::new(4850));
+        assert_eq!(owner_balance, Uint128::new(4880));
 
         // check that the amm address on the cw20 quote token contract has the correct amount of quote tokens
         let amm_balance = quote_token_contract
             .balance::<_, _, Empty>(&router, amm_addr.clone())
             .unwrap();
-        assert_eq!(amm_balance, Uint128::new(150));
+        assert_eq!(amm_balance, Uint128::new(120));
 
         // check that the lp token contract has the correct lp tokens minted for the owner that added the liquidity
         let lp_balance = lp_token
