@@ -1,74 +1,73 @@
+# Motivation
 
-# Draft: SudoStake: Staking Asset Request for Liquidity
+Blockstream has a mining derivatives marketplace where users can buy the rights to hashing power to mine Bitcoins over a certain period defined in the contract.
 
-&nbsp;
+When a user buys a [BMN(Blockstream Mining Note)](https://blockstream.com/finance/bmn/), Bitcoin hashing power (measured in TH/s) gets allocated to the user, and mining rewards streams to an escrow account that releases the funds to the BMN holder after the expiration date defined in the contract.
 
-## Motivation
-
-Blockstream has a mining derivatives market where users can buy the rights to hashing power to mine Bitcoins over a certain period defined in the contract.
-
-When a user buys a [BMN(Blockstream mining note)](https://blockstream.com/finance/bmn/), Bitcoin hashing power (measured in TH/s) gets allocated to the user, and mining rewards streams to an escrow account that releases the funds to the BMN holder after the expiration date defined in the contract.
-
-Meanwhile, the BMN is still tradable in a secondary market for users who need liquidity before the expiration of the mining contract.
+Meanwhile, BMN can still be traded in a secondary market for users who need liquidity before the expiration date stated on the mining contract.
 
 &nbsp;
 
 ### Benefits to miners
 
 * BMN allows miners to generate liquidity in exchange for hashing power they control, thereby bringing liquidity to the otherwise illiquid but cashflow-rich mining business.
-
-* BMN lowers the barrier to entry into the mining business by allowing investors to buy BMN representing mining hash rates.
-
-&nbsp;
-
-## Renting staking/voting power on the cosmos
-
-We can describe a protocol that allows stakeholders to create vaults holding staked assets. This time, instead of a marketplace for trading hash rates, there is a marketplace for trading staking deals over a specified duration in exchange for liquidity, denominated in any IBC-enabled assets in the allow-list.
+* BMN lowers the barrier to entry into the mining business by allowing investors to buy BMN representing mining hash rate.
 
 &nbsp;
 
-### How it works
+## Managing staked assets directly on-chain
 
-* Anyone can mint one of 10,000 unique vaults.
+Cosmos-SDK base blockchains usually have an un-bonding period(or time it takes for bonded tokens to become available after a withdrawal request to a validator) ranging from 7 - 28 days, which leads to a couple of issues for delegators.
 
-* Vault owners can manage their staking assets using the vault, including staking, un-staking, claiming rewards, voting, and withdrawing funds.
-
-* Vault owners can rent out staking and voting rights to staking assets held in the vault for a specified duration.
-
-* Vault owners can list vaults for sale or transfer vaults to another owner.
+* Limited Defi use cases (because bonding directly to the network means the only viable yield-bearing option is staking rewards).
+* Currently, it's not possible to transfer bonded assets to another address without first un-bonding them.
 
 &nbsp;
 
-### Benefits to Vault owners
+## Vault-based alternative to liquid-staking
 
-Vault owners can rent out rights to their staking assets at a discounted rate in exchange for upfront liquidity for a specified duration in a peer-to-peer marketplace, thereby unlocking liquidity for their staking assets without giving up control to a third party.
+Vaults are instances of a smart-contract that manages staked assets on behalf of its owner, the benefits from doing this are as follows;
+
+* Vaults can be transfered instantly to another owner/entity
+* Vaults containing assets can be used as collateral to borrow USDC in a p2p marketplace
+* A vault owner can offer staking deals in exchange for upfront liquidity
+* Users can create multiple vaults with different presets for managing different asset groups.
+* The flexibility vault-based asset management provides, encourages more assets to be bonded to the network, which increases the over-all security of the network.
 
 &nbsp;
 
 ## Contracts specification
 
-The protocol defines two primary smart-contracts for managing these interactions.
-
-* `VAULTS_CONTRACT`
-* `VAULT_CONTRACT`
+The protocol defines two primary smart contracts for managing these interactions.
 
 &nbsp;
 
-### VAULTS_CONTRACT
+### VAULTS_MANAGER_CONTRACT
 
-#### `state: vaults_list`
+<details>
+<summary>State: vaults_list</summary>
 
-A list of 10,000 vaults created by the VAULTS_CONTRACT.
+<pre>
+[
+    {
+        vault_id,
+        vault_c_addres,
+        owner_adddress
+    },
+    ...
+]
+</pre>
+</details>
 
-#### `fn: Mint`
+#### `fn: mint`
 
-Creates a new vault by calling the instantiate method of the VAULT_CONTRACT, which returns a contract address, that is then associated with the msg.sender.
+Create a new vault by calling the instantiate method of the VAULT_CONTRACT, which returns a contract address, that is then associated with the `msg.sender`.
 
-#### `fn: Transfer`
+#### `fn: transfer`
 
-Allows a vault owner to transfer ownership to another user.
+Allow a vault owner to transfer ownership to another user.
 
-#### `fn: ListForSale`
+#### `fn: list_for_sale`
 
 A vault owner can list their vault for sale for a fixed price.
 
@@ -76,42 +75,69 @@ A vault owner can list their vault for sale for a fixed price.
 
 ### VAULT_CONTRACT
 
-#### `state: vault_preferences`
+<details>
+<summary>State: vault_preferences</summary>
 
-A struct that holds the config parameters of the vault.
+<pre>
+{
+    // Only vaults_manager_contract can update the owner's address
+    vault_manager_address,
+    owner:{
+        address,
+        actions_scope: [delegate, undelegate, redelegate, claim_rewards, withdraw_funds]
+        is_active,
+    }
+    controller: {
+        address,
+        actions_scope: [claim_rewards, withdraw_funds],
+        expiration_date
+        percentage_stake_to_undelegate_at_liquidation
+        is_active
+    }
+}
+</pre>
+</details>
 
-#### `fn: Delegate`
+#### `fn: delegate`
 
-Allows the vault owner to stake the assets to a validator.
+Allow the vault owner to stake the assets to a validator.
 
-#### `fn: Undelegate`
+#### `fn: undelegate`
 
-Allows the vault owner to unstake the assets.
+Allow the vault owner to un-stake the assets.
 
-#### `fn: Redelegate`
+#### `fn: redelegate`
 
-Allows the vault owner to redelegate their stake to another validator.
+Allow the vault owner to redelegate their stake to another validator.
 
-#### `fn: WithdrawFunds`
+#### `fn: withdraw_funds`
 
-Allows the vault owner to withdraw staking assets held in the vault.
+Allow the vault owner/controller to withdraw assets held in the vault based on allowance.
 
-#### `fn: ClaimRewards`
+#### `fn: claim_rewards`
 
-Allows the vault owners (renters included), to call the claim rewards method.
+Allow the vault owner/controller to claim staking rewards.
 
-#### `fn: UpdateVaultPreferences`
+#### `fn: change_vault_owner`
 
-Allows the vault owner to update vault preferences.
+Allow the associated vaults_manager_contract to change a vault's owner.
+
+#### `fn: create_deal`
+
+Allow the vault owner to create a deal that other users can see
+
+#### `fn: accept_deal`
+
+Allow a user to accept a deal created by the vault owner
 
 &nbsp;
 
 ## Governance
 
-Completely decentralized, only burn 100k HUAHUA to mint a vault.
+TBA
 
 &nbsp;
 
 ## Market Places
 
-Anyone can create frontends/marketplaces that allow users' interaction with vaults.
+Anyone can create frontends/marketplaces that allow users to interact with vaults on supported blockchains.
