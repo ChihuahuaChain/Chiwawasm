@@ -1,14 +1,14 @@
+use cosmwasm_std::Uint128;
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
-    // todo
-    // amount_burned_already
-    // max_balance_to_burn
-    // multiplier
+    pub balance_burned_already: Uint128,
+    pub max_balance_to_burn: Uint128,
+    pub multiplier: u8,
 }
 
 // This stores the config variables during initialization of the contract
-pub const INIT_CONFIG: Item<Config> = Item::new("INIT_CONFIG");
+pub const CONFIG: Item<Config> = Item::new("CONFIG");

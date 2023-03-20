@@ -1,8 +1,8 @@
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::Config;
+use crate::state::{Config, CONFIG};
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
+    entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
 };
 
 // contract info
@@ -19,10 +19,18 @@ pub fn instantiate(
     // Store the contract name and version
     cw2::set_contract_version(_deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    // tood
+    // Save contract state
+    CONFIG.save(
+        _deps.storage,
+        &Config {
+            max_balance_to_burn: _msg.max_balance_to_burn,
+            multiplier: _msg.multiplier,
+            balance_burned_already: Uint128::zero(),
+        },
+    )?;
 
-    // return response
-    Ok(Response::new())
+    // response
+    Ok(Response::new().add_attribute("method", "instantiate"))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -44,6 +52,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 pub fn query_info(_deps: Deps) -> StdResult<Config> {
-    // todo
-    Ok(Config {})
+    let config = CONFIG.load(_deps.storage)?;
+    Ok(config)
 }

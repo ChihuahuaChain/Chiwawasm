@@ -1,1 +1,2 @@
-// todo
+#[cfg(test)]
+mod tests {}
