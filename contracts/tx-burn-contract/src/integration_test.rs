@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        msg::{InstantiateMsg, QueryMsg},
+        msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
         state::Config,
     };
     use cosmwasm_std::{Addr, Coin, Empty, Uint128};
@@ -35,7 +35,7 @@ mod tests {
         ))
     }
 
-    fn instantiate_accounts_manager(app: &mut App) -> Addr {
+    fn instantiate_contract(app: &mut App) -> Addr {
         let template_id = app.store_code(contract_template());
 
         let msg = InstantiateMsg {
@@ -60,15 +60,20 @@ mod tests {
 
     fn get_contract_info(app: &mut App, contract_address: &Addr) -> Config {
         let msg = QueryMsg::Info {};
-        let result: Config = app.wrap().query_wasm_smart(contract_address, &msg).unwrap();
+        app.wrap().query_wasm_smart(contract_address, &msg).unwrap()
+    }
 
-        result
+    fn bank_balance(router: &mut App, addr: &Addr, denom: String) -> Coin {
+        router
+            .wrap()
+            .query_balance(addr.to_string(), denom)
+            .unwrap()
     }
 
     #[test]
     fn test_instantiate() {
         let mut app = mock_app();
-        let amm_addr = instantiate_accounts_manager(&mut app);
+        let amm_addr = instantiate_contract(&mut app);
 
         // Query for the contract info to assert that the lp token and other important
         // data was indeed saved
@@ -77,10 +82,177 @@ mod tests {
         assert_eq!(
             info,
             Config {
+                admin: Addr::unchecked(USER),
                 max_balance_to_burn: Uint128::new(100_000_000),
                 multiplier: 2u8,
                 balance_burned_already: Uint128::zero()
             }
         );
+    }
+
+    #[test]
+    fn test_update_preferences() {
+        // Step 1
+        // Instantiate contract instance
+        // ------------------------------------------------------------------------------
+        let mut router = mock_app();
+        let contract_addr = instantiate_contract(&mut router);
+
+        // Step 2
+        // Update preferences
+        // ------------------------------------------------------------------------------
+        let new_max_burn_amount = Uint128::new(200_000_000);
+        let execute_msg = ExecuteMsg::UpdatePreferences {
+            max_burn_amount: Some(new_max_burn_amount),
+            multiplier: None,
+        };
+        router
+            .execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &execute_msg,
+                &[],
+            )
+            .unwrap();
+
+        // Step 3
+        // query contract info to verify that values checks out
+        // ------------------------------------------------------------------------------
+        let info = get_contract_info(&mut router, &contract_addr);
+        assert_eq!(
+            info,
+            Config {
+                admin: Addr::unchecked(USER),
+                balance_burned_already: Uint128::zero(),
+                max_balance_to_burn: new_max_burn_amount,
+                multiplier: 2u8,
+            }
+        );
+    }
+
+    #[test]
+    fn test_withdraw_balance() {
+        // Step 1
+        // Instantiate contract instance
+        // ------------------------------------------------------------------------------
+        let mut router = mock_app();
+        let contract_addr = instantiate_contract(&mut router);
+
+        // Step 2
+        // Send some tokens to vault_c_addr
+        // ------------------------------------------------------------------------------
+        let amount = Uint128::new(1_000_000);
+        router
+            .send_tokens(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &[Coin {
+                    denom: STAKING_DENOM.to_string(),
+                    amount,
+                }],
+            )
+            .unwrap();
+
+        // Step 3
+        // Test error case ContractError::Unauthorized {}
+        // ------------------------------------------------------------------------------
+        let wrong_owner = Addr::unchecked("WRONG_OWNER");
+        let withdraw_balance_msg = ExecuteMsg::WithdrawBalance {
+            to_address: None,
+            funds: Coin {
+                denom: STAKING_DENOM.to_string(),
+                amount: amount,
+            },
+        };
+        router
+            .execute_contract(
+                wrong_owner,
+                contract_addr.clone(),
+                &withdraw_balance_msg,
+                &[],
+            )
+            .unwrap_err();
+
+        // Step 4
+        // Test error case ContractError::InsufficientBalance {}
+        // ------------------------------------------------------------------------------
+        let withdraw_balance_msg = ExecuteMsg::WithdrawBalance {
+            to_address: None,
+            funds: Coin {
+                denom: STAKING_DENOM.to_string(),
+                amount: amount + amount,
+            },
+        };
+        router
+            .execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &withdraw_balance_msg,
+                &[],
+            )
+            .unwrap_err();
+
+        // Step 5
+        // Withdraw half of the contract balance without providing an optional recipient
+        // ------------------------------------------------------------------------------
+        let half = Uint128::new(500_000);
+        let withdraw_balance_msg = ExecuteMsg::WithdrawBalance {
+            to_address: None,
+            funds: Coin {
+                denom: STAKING_DENOM.to_string(),
+                amount: half,
+            },
+        };
+        router
+            .execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &withdraw_balance_msg,
+                &[],
+            )
+            .unwrap();
+
+        // Step 6
+        // Verify caller's balance
+        // ------------------------------------------------------------------------------
+        let balance = bank_balance(
+            &mut router,
+            &Addr::unchecked(USER),
+            STAKING_DENOM.to_string(),
+        );
+        assert_eq!(balance.amount, Uint128::new(SUPPLY) - half);
+
+        // Step 7
+        // Withdraw the remaining half of the contract balance
+        // by providing an optional recipient
+        // ------------------------------------------------------------------------------
+        let recipient = Addr::unchecked("recipient");
+        let withdraw_balance_msg = ExecuteMsg::WithdrawBalance {
+            to_address: Some(recipient.to_string()),
+            funds: Coin {
+                denom: STAKING_DENOM.to_string(),
+                amount: half,
+            },
+        };
+        router
+            .execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &withdraw_balance_msg,
+                &[],
+            )
+            .unwrap();
+
+        // Step 8
+        // Verify recipient's balance
+        // ------------------------------------------------------------------------------
+        let balance = bank_balance(&mut router, &recipient, STAKING_DENOM.to_string());
+        assert_eq!(balance.amount, half);
+
+        // Step 9
+        // Verify that the contract_addr balance is zero
+        // ------------------------------------------------------------------------------
+        let balance = bank_balance(&mut router, &contract_addr, STAKING_DENOM.to_string());
+        assert_eq!(balance.amount, Uint128::zero());
     }
 }

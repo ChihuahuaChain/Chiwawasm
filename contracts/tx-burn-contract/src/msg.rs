@@ -15,10 +15,9 @@ pub enum ExecuteMsg {
         amount: Uint128,
     },
     UpdatePreferences {
-        amount: Option<Uint128>,
-        val: Option<u8>,
+        max_burn_amount: Option<Uint128>,
+        multiplier: Option<u8>,
     },
-
     WithdrawBalance {
         to_address: Option<String>,
         funds: Coin,
