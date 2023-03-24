@@ -139,7 +139,7 @@ mod tests {
         let contract_addr = instantiate_contract(&mut router);
 
         // Step 2
-        // Send some tokens to vault_c_addr
+        // Send some tokens to contract_addr
         // ------------------------------------------------------------------------------
         let amount = Uint128::new(1_000_000);
         router
@@ -254,5 +254,83 @@ mod tests {
         // ------------------------------------------------------------------------------
         let balance = bank_balance(&mut router, &contract_addr, STAKING_DENOM.to_string());
         assert_eq!(balance.amount, Uint128::zero());
+    }
+
+    #[test]
+    fn test_burn_tokens() {
+        // Step 1
+        // Instantiate contract instance
+        // ------------------------------------------------------------------------------
+        let mut router = mock_app();
+        let contract_addr = instantiate_contract(&mut router);
+
+        // Step 2
+        // Send some tokens to contract_addr
+        // ------------------------------------------------------------------------------
+        let amount_sent_to_contract = Uint128::new(1_000_000);
+        router
+            .send_tokens(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &[Coin {
+                    denom: STAKING_DENOM.to_string(),
+                    amount: amount_sent_to_contract,
+                }],
+            )
+            .unwrap();
+
+        // Step 3
+        // Test error case ContractError::IncorrectAmountProvided {}
+        // ------------------------------------------------------------------------------
+        let burn_token_msg = ExecuteMsg::BurnTokens {
+            amount: amount_sent_to_contract,
+        };
+        router
+            .execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &burn_token_msg,
+                &[],
+            )
+            .unwrap_err();
+
+        // Step 4
+        // Send 100_000_000 to be burned by the contract
+        // ------------------------------------------------------------------------------
+        let amount_to_burn = Uint128::new(100_000_000);
+        let burn_token_msg = ExecuteMsg::BurnTokens {
+            amount: amount_to_burn,
+        };
+        router
+            .execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &burn_token_msg,
+                &[Coin {
+                    denom: STAKING_DENOM.to_string(),
+                    amount: amount_to_burn,
+                }],
+            )
+            .unwrap();
+
+        // Step 5
+        // Verify that the contract_addr balance is zero
+        // ------------------------------------------------------------------------------
+        let balance = bank_balance(&mut router, &contract_addr, STAKING_DENOM.to_string());
+        assert_eq!(balance.amount, Uint128::zero());
+
+        // Step 6
+        // Verify that the user balance has decreased 
+        // by amount_sent_to_contract + amount_to_burn
+        // ------------------------------------------------------------------------------
+        let balance = bank_balance(
+            &mut router,
+            &Addr::unchecked(USER),
+            STAKING_DENOM.to_string(),
+        );
+        assert_eq!(
+            balance.amount,
+            Uint128::from(SUPPLY) - amount_sent_to_contract - amount_to_burn
+        );
     }
 }

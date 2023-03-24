@@ -2,8 +2,8 @@ use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::{Config, CONFIG};
 use cosmwasm_std::{
-    attr, entry_point, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut,
-    Env, MessageInfo, Response, StdResult, Uint128,
+    attr, entry_point, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env,
+    MessageInfo, Response, StdError, StdResult, Uint128,
 };
 
 // contract info
@@ -88,6 +88,37 @@ fn get_available_balace(
     })
 }
 
+fn get_amount_for_denom(coins: &[Coin], denom: &str) -> Coin {
+    let amount: Uint128 = coins
+        .iter()
+        .filter(|c| c.denom == denom)
+        .map(|c| c.amount)
+        .sum();
+
+    Coin {
+        amount,
+        denom: denom.to_string(),
+    }
+}
+
+fn validate_exact_native_amount(
+    deps: &DepsMut,
+    coins: &[Coin],
+    given_amount: Uint128,
+) -> Result<(), ContractError> {
+    let denom_str = deps.querier.query_bonded_denom()?;
+    let actual = get_amount_for_denom(coins, denom_str.as_str());
+
+    if actual.amount != given_amount {
+        return Err(ContractError::IncorrectAmountProvided {
+            provided: actual.amount,
+            required: given_amount,
+        });
+    }
+
+    Ok(())
+}
+
 fn get_bank_transfer_to_msg(recipient: &Addr, denom: &str, amount: Uint128) -> CosmosMsg {
     let transfer_bank_msg = BankMsg::Send {
         to_address: recipient.into(),
@@ -107,9 +138,52 @@ pub fn execute_burn_tokens(
     info: &MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    // TODO implement this˝
-    // respond
-    Ok(Response::default())
+    // make sure the caller sends the correct amount to the contract
+    validate_exact_native_amount(&deps, &info.funds, amount)?;
+
+    // Calculate max_burn_allowance and extra_amount_to_burn
+    let config = CONFIG.load(deps.storage)?;
+    let max_burn_allowance = config.max_balance_to_burn - config.balance_burned_already;
+    let extra_amount_to_burn = amount
+        .checked_mul(Uint128::from(config.multiplier))
+        .map_err(StdError::overflow)?;
+
+    // Calculate expected total_amount_to_burn
+    let mut total_amount_to_burn = amount;
+    if max_burn_allowance > extra_amount_to_burn {
+        total_amount_to_burn += extra_amount_to_burn;
+    } else {
+        total_amount_to_burn += max_burn_allowance;
+    }
+
+    // When the contract balance is less than total_amount_to_burn,
+    // total_amount_to_burn is set to the contract balance
+    let denom_str = deps.querier.query_bonded_denom()?;
+    let available_balance = get_available_balace(&env, &deps, denom_str.clone())?;
+    if total_amount_to_burn > available_balance.amount {
+        total_amount_to_burn = available_balance.amount;
+    }
+
+    // Update balance_burned_already
+    CONFIG.update(deps.storage, |mut config| -> Result<_, ContractError> {
+        let extra_amount_burned = total_amount_to_burn - amount;
+        config.balance_burned_already += extra_amount_burned;
+        Ok(config)
+    })?;
+
+    // Proceed to burning total_amount_to_burn
+    let burn_msg = BankMsg::Burn {
+        amount: vec![Coin {
+            amount: total_amount_to_burn,
+            denom: denom_str,
+        }],
+    };
+
+    // Build response
+    Ok(Response::new().add_message(burn_msg).add_attributes(vec![
+        attr("method", "burn_tokens"),
+        attr("total_amount_to_burn", total_amount_to_burn.to_string()),
+    ]))
 }
 
 pub fn execute_update_preferences(
@@ -121,7 +195,7 @@ pub fn execute_update_preferences(
 ) -> Result<Response, ContractError> {
     verify_caller_is_admin(&info, &deps)?;
 
-    // Update when max_burn_amount > config.balance_burned_already
+    // Update max_balance_to_burn when max_burn_amount > config.balance_burned_already
     if let Some(val) = max_burn_amount {
         CONFIG.update(deps.storage, |mut config| -> Result<_, ContractError> {
             if val > config.balance_burned_already {

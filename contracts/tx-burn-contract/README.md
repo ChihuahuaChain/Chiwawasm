@@ -49,7 +49,3 @@ pub enum ExecuteMsg {
 `$ RUST_BACKTRACE=1 cargo unit-test`
 
  &nbsp;
-
-## How to test
-
-todo
