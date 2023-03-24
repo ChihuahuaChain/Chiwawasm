@@ -29,11 +29,9 @@ pub enum ExecuteMsg {
     BurnTokens {
         amount: Uint128,
     },
-    UpdateMaxBurnAmount {
-        amount: Uint128,
-    },
-    UpdateMultiplier {
-        val: u8,
+    UpdatePreferences {
+        max_burn_amount: Option<Uint128>,
+        multiplier: Option<u8>,
     },
     WithdrawBalance {
         to_address: Option<String>,
