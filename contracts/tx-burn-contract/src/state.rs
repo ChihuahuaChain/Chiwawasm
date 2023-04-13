@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     pub admin: Addr,
-    pub balance_burned_already: Uint128,
-    pub max_balance_to_burn: Uint128,
+    pub max_extra_balance_to_burn_per_tx: Uint128,
     pub multiplier: u8,
 }
 

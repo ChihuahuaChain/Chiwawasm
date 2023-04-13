@@ -21,7 +21,7 @@ This contract allows for the creation of a liquidity pool, with the following pr
 
 ```rust
 pub struct InstantiateMsg {
-    pub max_balance_to_burn: Uint128,
+    pub max_extra_balance_to_burn_per_tx: Uint128,
     pub multiplier: u8,
 }
 
@@ -30,7 +30,7 @@ pub enum ExecuteMsg {
         amount: Uint128,
     },
     UpdatePreferences {
-        max_burn_amount: Option<Uint128>,
+        max_extra_burn_amount_per_tx: Option<Uint128>,
         multiplier: Option<u8>,
     },
     WithdrawBalance {
@@ -51,8 +51,7 @@ pub enum QueryMsg {
 
 pub struct Config {
     pub admin: Addr,
-    pub balance_burned_already: Uint128,
-    pub max_balance_to_burn: Uint128,
+    pub max_extra_balance_to_burn_per_tx: Uint128,
     pub multiplier: u8,
 }
 ```
@@ -93,7 +92,7 @@ pub struct Config {
 #### Prepare the json message payload
 
 ```zsh
-$ export INIT='{"max_balance_to_burn":"2000000","multiplier":2}';
+$ export INIT='{"max_extra_balance_to_burn_per_tx":"2000000","multiplier":2}';
 
 $ chihuahuad tx wasm instantiate $CODE_ID "$INIT" --from <account_name> --label "TX BURN CONTRACT" $TXFLAG -y --no-admin
 ```
@@ -135,8 +134,8 @@ chihuahuad tx wasm execute $CONTRACT "$E_PAYLOAD" --from <account_name> --amount
 ### Test UpdatePreferences
 
 ```zsh
-// Note: max_burn_amount and multiplier are optional
-export E_PAYLOAD='{"update_preferences":{"max_burn_amount": "5000000", "multiplier":"3"}}'
+// Note: max_extra_burn_amount_per_tx and multiplier are optional
+export E_PAYLOAD='{"update_preferences":{"max_extra_burn_amount_per_tx": "5000000", "multiplier":"3"}}'
 
 chihuahuad tx wasm execute $CONTRACT "$E_PAYLOAD" --from <account_name> $NODE $TXFLAG -y
 ```

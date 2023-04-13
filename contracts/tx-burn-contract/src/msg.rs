@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    pub max_balance_to_burn: Uint128,
+    pub max_extra_balance_to_burn_per_tx: Uint128,
     pub multiplier: u8,
 }
 
@@ -15,7 +15,7 @@ pub enum ExecuteMsg {
         amount: Uint128,
     },
     UpdatePreferences {
-        max_burn_amount: Option<Uint128>,
+        max_extra_burn_amount_per_tx: Option<Uint128>,
         multiplier: Option<u8>,
     },
     WithdrawBalance {

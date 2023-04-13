@@ -25,9 +25,8 @@ pub fn instantiate(
         _deps.storage,
         &Config {
             admin: _info.sender,
-            max_balance_to_burn: _msg.max_balance_to_burn,
+            max_extra_balance_to_burn_per_tx: _msg.max_extra_balance_to_burn_per_tx,
             multiplier: _msg.multiplier,
-            balance_burned_already: Uint128::zero(),
         },
     )?;
 
@@ -45,9 +44,15 @@ pub fn execute(
     match _msg {
         ExecuteMsg::BurnTokens { amount } => execute_burn_tokens(_deps, _env, &_info, amount),
         ExecuteMsg::UpdatePreferences {
-            max_burn_amount,
+            max_extra_burn_amount_per_tx,
             multiplier,
-        } => execute_update_preferences(_deps, _env, &_info, max_burn_amount, multiplier),
+        } => execute_update_preferences(
+            _deps,
+            _env,
+            &_info,
+            max_extra_burn_amount_per_tx,
+            multiplier,
+        ),
         ExecuteMsg::WithdrawBalance { to_address, funds } => {
             execute_withdraw_balance(_deps, _env, &_info, to_address, funds)
         }
@@ -141,20 +146,19 @@ pub fn execute_burn_tokens(
     // make sure the caller sends the correct amount to the contract
     validate_exact_native_amount(&deps, &info.funds, amount)?;
 
-    // Calculate max_burn_allowance and extra_amount_to_burn
+    // Calculate extra amount to burn
     let config = CONFIG.load(deps.storage)?;
-    let max_burn_allowance = config.max_balance_to_burn - config.balance_burned_already;
     let extra_amount_to_burn = amount
         .checked_mul(Uint128::from(config.multiplier))
         .map_err(StdError::overflow)?;
 
     // Calculate expected total_amount_to_burn
-    let mut total_amount_to_burn = amount;
-    if max_burn_allowance > extra_amount_to_burn {
-        total_amount_to_burn += extra_amount_to_burn;
+    let mut total_amount_to_burn = if extra_amount_to_burn > config.max_extra_balance_to_burn_per_tx
+    {
+        amount + config.max_extra_balance_to_burn_per_tx
     } else {
-        total_amount_to_burn += max_burn_allowance;
-    }
+        amount + extra_amount_to_burn
+    };
 
     // When the contract balance is less than total_amount_to_burn,
     // total_amount_to_burn is set to the contract balance
@@ -163,13 +167,6 @@ pub fn execute_burn_tokens(
     if total_amount_to_burn > available_balance.amount {
         total_amount_to_burn = available_balance.amount;
     }
-
-    // Update balance_burned_already
-    CONFIG.update(deps.storage, |mut config| -> Result<_, ContractError> {
-        let extra_amount_burned = total_amount_to_burn - amount;
-        config.balance_burned_already += extra_amount_burned;
-        Ok(config)
-    })?;
 
     // Proceed to burning total_amount_to_burn
     let burn_msg = BankMsg::Burn {
@@ -190,18 +187,15 @@ pub fn execute_update_preferences(
     deps: DepsMut,
     _env: Env,
     info: &MessageInfo,
-    max_burn_amount: Option<Uint128>,
+    max_extra_balance_to_burn_per_tx: Option<Uint128>,
     multiplier: Option<u8>,
 ) -> Result<Response, ContractError> {
     verify_caller_is_admin(&info, &deps)?;
 
-    // Update max_balance_to_burn when max_burn_amount > config.balance_burned_already
-    if let Some(val) = max_burn_amount {
+    // Update max_extra_balance_to_burn_per_tx when max_burn_amount > config.balance_burned_already
+    if let Some(val) = max_extra_balance_to_burn_per_tx {
         CONFIG.update(deps.storage, |mut config| -> Result<_, ContractError> {
-            if val > config.balance_burned_already {
-                config.max_balance_to_burn = val;
-            }
-
+            config.max_extra_balance_to_burn_per_tx = val;
             Ok(config)
         })?;
     }
