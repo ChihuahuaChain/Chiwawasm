@@ -11,6 +11,7 @@ mod tests {
     const STAKING_DENOM: &str = "TOKEN";
     const SUPPLY: u128 = 500_000_000u128;
     const MULTIPLIER: u8 = 2u8;
+    const MAX_EXTRA_BURN_BALANCE: u128 = 20_000_000u128;
 
     fn mock_app() -> App {
         AppBuilder::new().build(|router, _, storage| {
@@ -40,7 +41,7 @@ mod tests {
         let template_id = app.store_code(contract_template());
 
         let msg = InstantiateMsg {
-            max_extra_balance_to_burn_per_tx: Uint128::new(20_000_000),
+            max_extra_balance_to_burn_per_tx: Uint128::new(MAX_EXTRA_BURN_BALANCE),
             multiplier: MULTIPLIER,
         };
 
@@ -85,7 +86,10 @@ mod tests {
             Config {
                 admin: Addr::unchecked(USER),
                 max_extra_balance_to_burn_per_tx: Uint128::new(20_000_000),
-                multiplier: 2u8,
+                multiplier: MULTIPLIER,
+                total_amount_burned: Uint128::zero(),
+                total_tx_burned: 0u64,
+                total_balance_burned: Uint128::zero(),
             }
         );
     }
@@ -125,6 +129,9 @@ mod tests {
                 admin: Addr::unchecked(USER),
                 max_extra_balance_to_burn_per_tx: new_max_extra_burn_amount_per_tx,
                 multiplier: 2u8,
+                total_amount_burned: Uint128::zero(),
+                total_tx_burned: 0u64,
+                total_balance_burned: Uint128::zero(),
             }
         );
     }
@@ -361,6 +368,24 @@ mod tests {
                 - amount_sent_to_contract
                 - initial_amount_to_burn
                 - final_amount_to_burn
+        );
+
+        // Step 9
+        // Inspect config to see that all data checks out
+        // ------------------------------------------------------------------------------
+        let info = get_contract_info(&mut router, &contract_addr);
+        assert_eq!(
+            info,
+            Config {
+                admin: Addr::unchecked(USER),
+                max_extra_balance_to_burn_per_tx: Uint128::new(MAX_EXTRA_BURN_BALANCE),
+                multiplier: MULTIPLIER,
+                total_amount_burned: amount_sent_to_contract
+                    + initial_amount_to_burn
+                    + final_amount_to_burn,
+                total_tx_burned: 2u64,
+                total_balance_burned: amount_sent_to_contract,
+            }
         );
     }
 }

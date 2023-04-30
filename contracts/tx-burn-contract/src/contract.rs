@@ -27,6 +27,9 @@ pub fn instantiate(
             admin: _info.sender,
             max_extra_balance_to_burn_per_tx: _msg.max_extra_balance_to_burn_per_tx,
             multiplier: _msg.multiplier,
+            total_amount_burned: Uint128::zero(),
+            total_tx_burned: 0u64,
+            total_balance_burned: Uint128::zero(),
         },
     )?;
 
@@ -167,6 +170,18 @@ pub fn execute_burn_tokens(
     if total_amount_to_burn > available_balance.amount {
         total_amount_to_burn = available_balance.amount;
     }
+
+    // Update config state
+    CONFIG.update(deps.storage, |mut data| -> Result<_, ContractError> {
+        // Update total_amount_burned and total_tx_burned
+        data.total_amount_burned += total_amount_to_burn;
+        data.total_tx_burned += 1;
+
+        // Update balance burned
+        let balance_burned = total_amount_to_burn - amount;
+        data.total_balance_burned += balance_burned;
+        Ok(data)
+    })?;
 
     // Proceed to burning total_amount_to_burn
     let burn_msg = BankMsg::Burn {
