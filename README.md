@@ -19,21 +19,13 @@ The following contracts are available for use. For each of the contracts in `./c
 
 &nbsp;
 
-[Burn-Contract](https://github.com/ChihuahuaChain/CosmWasm/tree/main/contracts/burn-contract)
+| Contracts (tag: v0.1.0)                                                        | Description                                                        |
+| :----------------------------------------------------------------------------- | :----------------------------------------------------------------- |
+| [Burn-Contract](contracts/burn-contract)                                       | A basic contract to burn token balances.                           |
+| [Tx-Burn-Contract](contracts/tx-burn-contract)                                 | Burns tokens sent by the caller along with extra from contract     |
+| [Tokens-Manger](contracts/tokens-manager)                                      | Manages the creation of new cw20 tokens for a fee                  |
+| [Token-Swap](contracts/token-swap)                                             | Allows swapping between tokens                                     |
 
-A basic contract to burn token balances.
-
-&nbsp;
-
-[Tokens-Manger](https://github.com/ChihuahuaChain/Chiwawasm/tree/main/contracts/tokens-manager)
-
-The cw20 tokens manager allow users to pay a `token_creation_fee` to mint cw20 tokens managed by this contract.
-
-&nbsp;
-
-[Token-Swap](https://github.com/ChihuahuaChain/Chiwawasm/tree/main/contracts/token-swap)
-
-A constant product (AMM) implementation that allows the trading of any `CW20` or `IBC` tokens quoted against the base token (`HUAHUA`).
 
 &nbsp;
 
